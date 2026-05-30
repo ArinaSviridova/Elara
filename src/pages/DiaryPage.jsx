@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
+import { OracleCardWidget } from '../components/DnDWidget'
 import { useAuth } from '../context/AuthContext'
-import { useLang } from '../context/LangContext'
+import { useLang, useRl } from '../context/LangContext'
+import { hashPin } from '../components/AppLock'
 
 const isSecure = location.protocol === 'https:' || location.hostname === 'localhost'
+const DEFAULT_DIARY_KEY = 'elara-diary-no-password-v1'
 
 async function encryptText(text, password) {
   if (!isSecure || !crypto.subtle) {
@@ -109,9 +112,11 @@ export default function DiaryPage() {
   const today = new Date().toISOString().slice(0,10)
 
   const [unlocked, setUnlocked] = useState(false)
+  const [showOracle, setShowOracle] = useState(false)
   const [passwordInput, setPasswordInput] = useState('')
   const [sessionPw, setSessionPw] = useState('')
   const [hasPassword, setHasPassword] = useState(false)
+  const [diaryLockEnabled, setDiaryLockEnabled] = useState(false)
   const [text, setText] = useState('')
   const [selectedTags, setSelectedTags] = useState([])
   const [expandedParent, setExpandedParent] = useState(null)
@@ -130,24 +135,37 @@ export default function DiaryPage() {
   const [selectedPushPartners, setSelectedPushPartners] = useState([])
   const [sendingPush, setSendingPush] = useState(false)
 
-  const rl = (ru, en) => lang === 'en' ? en : ru
+  const rl = useRl()
 
   useEffect(() => {
-    // Проверяем сохранённый пароль — сначала сессия, потом localStorage
-    const sessionPw = sessionStorage.getItem('elara_diary_pw')
-    const localPw = localStorage.getItem(`elara_diary_pw_val_${user.id}`)
-    const storedPw = sessionPw || localPw
+    if (!user?.id) return
 
-    if (storedPw) {
-      setSessionPw(storedPw)
-      setHasPassword(true)
+    const explicitLock = localStorage.getItem(`elara_diary_lock_${user.id}`)
+    const legacyHasPassword = localStorage.getItem(`elara_diary_pw_${user.id}`) === '1'
+    const enabled = explicitLock === '1' || (explicitLock === null && legacyHasPassword)
+
+    setDiaryLockEnabled(enabled)
+
+    const sessionPassword = sessionStorage.getItem(`elara_diary_session_${user.id}`) || sessionStorage.getItem('elara_diary_pw')
+    const hasHash = !!localStorage.getItem(`elara_diary_pw_hash_${user.id}`) || legacyHasPassword
+
+    if (!enabled) {
+      setSessionPw(sessionPassword || DEFAULT_DIARY_KEY)
+      setHasPassword(hasHash)
       setUnlocked(true)
-    } else {
-      const hasPw = localStorage.getItem(`elara_diary_pw_${user.id}`)
-      if (hasPw) setHasPassword(true)
+      fetchPushPartners()
+      return
     }
+
+    setHasPassword(hasHash)
+
+    if (sessionPassword) {
+      setSessionPw(sessionPassword)
+      setUnlocked(true)
+    }
+
     fetchPushPartners()
-  }, [])
+  }, [user?.id])
 
   useEffect(() => {
     if (unlocked && sessionPw) loadEntry(selectedDate)
@@ -167,28 +185,59 @@ export default function DiaryPage() {
   }
 
   async function handleUnlock(e) {
-    e.preventDefault(); setWrongPw(false)
+    e.preventDefault()
+    setWrongPw(false)
+
+    if (!passwordInput) return
+
     if (!hasPassword) {
-      // Сохраняем пароль в оба хранилища
-      sessionStorage.setItem('elara_diary_pw', passwordInput)
-      localStorage.setItem(`elara_diary_pw_val_${user.id}`, passwordInput)
+      const pwHash = await hashPin(passwordInput.padEnd(4, '0').slice(0, 4))
+      // Для дневника пароль может быть длиннее 4 символов, поэтому хэшируем дополнительно обычной строкой.
+      const rawHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(passwordInput))
+      const diaryHash = Array.from(new Uint8Array(rawHash)).map(b => b.toString(16).padStart(2,'0')).join('')
+
+      localStorage.setItem(`elara_diary_pw_hash_${user.id}`, diaryHash)
+      localStorage.setItem(`elara_diary_lock_${user.id}`, '1')
       localStorage.setItem(`elara_diary_pw_${user.id}`, '1')
-      setSessionPw(passwordInput); setHasPassword(true); setUnlocked(true)
-      loadEntry(selectedDate); return
-    }
-    const { data } = await supabase
-      .from('diary_entries').select('encrypted_text')
-      .eq('user_id', user.id).not('encrypted_text', 'is', null).limit(1).maybeSingle()
-    if (!data) {
+      sessionStorage.setItem(`elara_diary_session_${user.id}`, passwordInput)
       sessionStorage.setItem('elara_diary_pw', passwordInput)
-      localStorage.setItem(`elara_diary_pw_val_${user.id}`, passwordInput)
-      setSessionPw(passwordInput); setUnlocked(true); loadEntry(selectedDate); return
+      setSessionPw(passwordInput)
+      setHasPassword(true)
+      setDiaryLockEnabled(true)
+      setUnlocked(true)
+      loadEntry(selectedDate)
+      return
     }
-    const result = await decryptText(data.encrypted_text, passwordInput)
-    if (result === null) { setWrongPw(true); return }
+
+    const storedHash = localStorage.getItem(`elara_diary_pw_hash_${user.id}`)
+    if (storedHash) {
+      const rawHash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(passwordInput))
+      const enteredHash = Array.from(new Uint8Array(rawHash)).map(b => b.toString(16).padStart(2,'0')).join('')
+      if (enteredHash !== storedHash) {
+        setWrongPw(true)
+        setPasswordInput('')
+        return
+      }
+    } else {
+      // Legacy-проверка старого дневника: пробуем расшифровать любую запись.
+      const { data } = await supabase
+        .from('diary_entries').select('encrypted_text')
+        .eq('user_id', user.id).not('encrypted_text', 'is', null).limit(1).maybeSingle()
+      if (data?.encrypted_text) {
+        const result = await decryptText(data.encrypted_text, passwordInput)
+        if (result === null) {
+          setWrongPw(true)
+          setPasswordInput('')
+          return
+        }
+      }
+    }
+
+    sessionStorage.setItem(`elara_diary_session_${user.id}`, passwordInput)
     sessionStorage.setItem('elara_diary_pw', passwordInput)
-    localStorage.setItem(`elara_diary_pw_val_${user.id}`, passwordInput)
-    setSessionPw(passwordInput); setUnlocked(true); loadEntry(selectedDate)
+    setSessionPw(passwordInput)
+    setUnlocked(true)
+    loadEntry(selectedDate)
   }
 
   async function loadEntry(date) {
@@ -199,15 +248,21 @@ export default function DiaryPage() {
     setSelectedTags(data.tags || [])
     setAiSuggestedTags([])
     setAiSupport('')
-    if (data.encrypted_text && sessionPw) {
-      const dec = await decryptText(data.encrypted_text, sessionPw)
+    if (data.encrypted_text) {
+      const key = sessionPw || DEFAULT_DIARY_KEY
+      let dec = await decryptText(data.encrypted_text, key)
+      if (dec === null && !diaryLockEnabled) {
+        const legacySession = sessionStorage.getItem(`elara_diary_session_${user.id}`) || sessionStorage.getItem('elara_diary_pw')
+        if (legacySession) dec = await decryptText(data.encrypted_text, legacySession)
+      }
       setText(dec || '')
     } else setText('')
   }
 
   async function handleSave() {
     setSaving(true)
-    const encrypted = text.trim() ? await encryptText(text, sessionPw) : null
+    const key = diaryLockEnabled ? sessionPw : DEFAULT_DIARY_KEY
+    const encrypted = text.trim() ? await encryptText(text, key) : null
     await supabase.from('diary_entries').upsert({
       user_id: user.id, date: selectedDate,
       encrypted_text: encrypted, tags: selectedTags,
@@ -282,7 +337,7 @@ export default function DiaryPage() {
         <p style={{ color:'var(--text2)', fontSize:14, lineHeight:1.6 }}>
           {hasPassword
             ? rl('Дневник защищён паролем','Diary is password protected')
-            : rl('Придумай пароль — только ты его знаешь','Set a password — only you will know it')}
+            : rl('Придумай пароль для дневника. Его можно отключить в профиле.','Create a diary password. You can turn it off in profile settings.')}
         </p>
       </div>
       <form onSubmit={handleUnlock} style={{ display:'flex', flexDirection:'column', gap:12 }}>
@@ -290,7 +345,7 @@ export default function DiaryPage() {
           value={passwordInput} onChange={e => { setPasswordInput(e.target.value); setWrongPw(false) }} autoFocus />
         {wrongPw && <p style={{ color:'#f87171', fontSize:13 }}>{rl('Неверный пароль','Wrong password')}</p>}
         <button type="submit" className="btn btn-primary" disabled={!passwordInput}>
-          {hasPassword ? rl('Открыть','Unlock') : rl('Установить пароль','Set password')}
+          {hasPassword ? rl('Открыть','Unlock') : rl('Установить пароль дневника','Set diary password')}
         </button>
       </form>
     </div>
@@ -303,9 +358,19 @@ export default function DiaryPage() {
 
       {/* Шапка */}
       <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <h2 style={{ fontSize:28 }}>{rl('Дневник','Diary')}</h2>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:8 }}>
+          <h2 style={{ fontSize:28 }}>{rl('Дневник','Diary')}</h2>
+        </div>
+        {showOracle && <OracleCardWidget lang={lang} onClose={() => setShowOracle(false)} />}
         <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
           style={{ background:'var(--bg2)', border:'1px solid var(--border)', borderRadius:8, color:'var(--text)', padding:'6px 10px', fontSize:12 }} />
+      </div>
+
+      <div style={{ fontSize:11, color:'var(--text3)', lineHeight:1.5, display:'flex', justifyContent:'space-between', gap:10, alignItems:'center' }}>
+        <span>{diaryLockEnabled ? rl('Дневник защищён отдельным паролем','Diary is protected with a separate password') : rl('Пароль дневника выключен в настройках','Diary password is off in settings')}</span>
+        {diaryLockEnabled && <button type="button" onClick={() => { sessionStorage.removeItem(`elara_diary_session_${user.id}`); sessionStorage.removeItem('elara_diary_pw'); setUnlocked(false); setText('') }} style={{ background:'transparent', border:'1px solid var(--border)', color:'var(--text3)', borderRadius:8, padding:'5px 9px', fontSize:11, cursor:'pointer' }}>
+          {rl('Закрыть','Lock')}
+        </button>}
       </div>
 
       {/* Текст дневника */}
@@ -498,6 +563,30 @@ export default function DiaryPage() {
           )}
         </div>
       )}
+
+      {/* Карта дня — внизу, как отдельный раздел */}
+      {localStorage.getItem('elara_oracle_mode') && !showOracle && (
+        <div style={{ 
+          margin:'8px 0', padding:'14px 16px', 
+          background:'linear-gradient(135deg, rgba(244,114,182,0.08), rgba(167,139,250,0.08))',
+          borderRadius:12, border:'1px solid rgba(244,114,182,0.2)',
+          display:'flex', alignItems:'center', justifyContent:'space-between',
+        }}>
+          <div>
+            <div style={{ fontSize:13, fontWeight:500, color:'#f472b6' }}>🃏 {rl('Карта дня','Card of day')}</div>
+            <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+              {rl('Метафорическая карта для рефлексии','Metaphoric card for reflection')}
+            </div>
+          </div>
+          <button onClick={() => setShowOracle(true)} style={{
+            padding:'8px 14px', borderRadius:20, border:'1px solid #f472b6',
+            background:'rgba(244,114,182,0.12)', color:'#f472b6', fontSize:12, cursor:'pointer',
+          }}>
+            {rl('Вытянуть','Draw')} ✦
+          </button>
+        </div>
+      )}
+
 
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
         {saved ? '✓' : saving ? '...' : rl('Сохранить','Save')}

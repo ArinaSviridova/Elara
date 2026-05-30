@@ -1,13 +1,17 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { PrettyButton } from '../lib/circleCalendar'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLang } from '../context/LangContext'
 
 const RELATION_TYPES = {
   group:       { emoji: '👥', labelRu: 'Группа подруг',    labelEn: 'Group of friends' },
-  friend:      { emoji: '👯', labelRu: 'Подруга / Друг',   labelEn: 'Friend' },
-  partner_any: { emoji: '💛', labelRu: 'Партнёр',           labelEn: 'Partner' },
+  friend:      { emoji: '👯', labelRu: 'Друг / подруга',   labelEn: 'Friend' },
+  partner:     { emoji: '💛', labelRu: 'Партнёр',           labelEn: 'Partner' },
+  family:      { emoji: '🏡', labelRu: 'Семья',             labelEn: 'Family' },
+  support:     { emoji: '🫶', labelRu: 'Поддержка',         labelEn: 'Support' },
 }
 
 const FRIEND_COLORS = [
@@ -16,8 +20,25 @@ const FRIEND_COLORS = [
   '#34d399','#60a5fa','#e879f9','#fbbf24',
 ]
 
+function hasPregnancyPrep(profile = {}) {
+  const conditions = Array.isArray(profile?.active_conditions) ? profile.active_conditions : []
+  return profile?.body_mode === 'pregnancy_planning' || profile?.body_mode === 'pregnancy' || conditions.includes('pregnancy_planning_marker')
+}
+
+function prepRoleText(person = {}, lang = 'ru') {
+  const gender = person?.gender || person?.gender_identity || 'prefer_not'
+  const mode = person?.body_mode || 'prefer_not'
+  const conditions = Array.isArray(person?.active_conditions) ? person.active_conditions : []
+  const hasCycle = ['menstruating', 'pregnancy_planning'].includes(mode) || conditions.includes('pregnancy_planning_marker')
+  if (mode === 'pregnancy') return lang === 'en' ? 'pregnancy focus' : 'фокус беременности'
+  if (['cis_man', 'male', 'man'].includes(gender)) return lang === 'en' ? 'sperm-side prep' : 'подготовка партнёра'
+  if (hasCycle || ['cis_woman', 'female', 'woman', 'trans_man', 'non_binary', 'genderfluid'].includes(gender)) return lang === 'en' ? 'cycle/fertility prep' : 'цикл и фертильность'
+  return lang === 'en' ? 'individual checklist' : 'индивидуальный чеклист'
+}
+
 export default function FriendsPage() {
   const { user, profile } = useAuth()
+  const navigate = useNavigate()
   const { t, lang } = useLang()
 
   const [groups, setGroups] = useState([])
@@ -25,6 +46,9 @@ export default function FriendsPage() {
   const [view, setView] = useState('main') // main | invite | create-group | join | group-detail | privacy
   const [selectedGroup, setSelectedGroup] = useState(null)
   const [selectedMember, setSelectedMember] = useState(null)
+  const [privacyDraft, setPrivacyDraft] = useState(null)
+  const [privacySaving, setPrivacySaving] = useState(false)
+  const [privacySaved, setPrivacySaved] = useState(false)
 
   // Форма создания группы
   const [newGroupName, setNewGroupName] = useState('')
@@ -40,24 +64,52 @@ export default function FriendsPage() {
   const [copied, setCopied] = useState('')
 
   useEffect(() => { fetchAll() }, [])
+  useEffect(() => {
+    if (view === 'privacy' && selectedMember) loadPrivacyDraft(selectedMember)
+  }, [view, selectedMember?.id])
+
+
+  async function ensureFriendship(friendId, relationType = 'friend', color = '#f472b6') {
+    if (!friendId || friendId === user.id) return
+    await supabase.from('friendships').upsert({
+      owner_id: user.id,
+      friend_id: friendId,
+      friend_color: color,
+      relation_type: relationType === 'group' ? 'friend' : relationType,
+    }, { onConflict: 'owner_id,friend_id' })
+  }
+
+  async function mirrorGroupsToFriends(allGroups) {
+    const tasks = []
+    ;(allGroups || []).forEach(g => {
+      if (g.isOwner) {
+        ;(g.members || []).forEach(m => {
+          if (m.user_id && m.user_id !== user.id) tasks.push(ensureFriendship(m.user_id, m.relation_type || 'friend', m.member_color || '#f472b6'))
+        })
+      } else if (g.owner_id && g.owner_id !== user.id) {
+        tasks.push(ensureFriendship(g.owner_id, g.myMembership?.relation_type || 'friend', g.myMembership?.member_color || '#f472b6'))
+      }
+    })
+    await Promise.all(tasks)
+  }
 
   async function fetchAll() {
     // Мои группы
     const { data: myGroups } = await supabase
       .from('groups')
-      .select('*, members:group_members(*, user:user_id(id, name, invite_code))')
+      .select('*, members:group_members(*, user:user_id(*))')
       .eq('owner_id', user.id)
 
     // Группы где я участник
     const { data: memberGroups } = await supabase
       .from('group_members')
-      .select('*, group:group_id(*, owner:owner_id(id, name))')
+      .select('*, group:group_id(*, owner:owner_id(*))')
       .eq('user_id', user.id)
 
     // Индивидуальные связи (старая система friendships)
     const { data: friends } = await supabase
       .from('friendships')
-      .select('*, friend:friend_id(id, name, invite_code)')
+      .select('*, friend:friend_id(*)')
       .eq('owner_id', user.id)
 
     // Объединяем все группы
@@ -71,8 +123,15 @@ export default function FriendsPage() {
       }
     })
 
+    await mirrorGroupsToFriends(allGroups)
+
+    const { data: freshFriends } = await supabase
+      .from('friendships')
+      .select('*, friend:friend_id(*)')
+      .eq('owner_id', user.id)
+
     setGroups(allGroups)
-    setIndividualConnections(friends || [])
+    setIndividualConnections(freshFriends || friends || [])
   }
 
   async function createGroup(e) {
@@ -119,6 +178,7 @@ export default function FriendsPage() {
       if (error) {
         setJoinError(rl('Ты уже в этой группе','Already in this group'))
       } else {
+        await ensureFriendship(group.owner_id, 'friend', joinColor)
         setJoinCode(''); setJoinRelation('group'); setView('main'); fetchAll()
       }
       setJoining(false); return
@@ -141,6 +201,7 @@ export default function FriendsPage() {
       if (error) {
         setJoinError(rl('Уже в этой группе','Already in this group'))
       } else {
+        await ensureFriendship(group.owner_id, joinRelation, joinColor)
         setJoinCode(''); setView('main'); fetchAll()
       }
       setJoining(false); return
@@ -160,7 +221,7 @@ export default function FriendsPage() {
     }
 
     const { error } = await supabase.from('friendships').insert({
-      owner_id: user.id, friend_id: person.id, friend_color: joinColor,
+      owner_id: user.id, friend_id: person.id, friend_color: joinColor, relation_type: joinRelation,
     })
     if (error) {
       setJoinError(rl('Уже добавлен','Already added'))
@@ -199,17 +260,118 @@ export default function FriendsPage() {
     setView('main'); fetchAll()
   }
 
-  async function updatePrivacy(type, value) {
-    if (!selectedMember) return
-    const field = type
-    if (selectedMember.source === 'friendship') {
-      await supabase.from('friendships').update({ is_visible: value }).eq('id', selectedMember.id)
-    } else {
-      await supabase.from('group_members').update({ [field]: value }).eq('id', selectedMember.id)
-    }
+
+  async function renameGroup(group) {
+    const nextName = prompt(rl('Новое название группы', 'New group name'), group?.name || '')
+    if (!nextName || !nextName.trim()) return
+    const clean = nextName.trim().slice(0, 50)
+    await supabase.from('groups').update({ name: clean }).eq('id', group.id).eq('owner_id', user.id)
+    setSelectedGroup(prev => prev ? { ...prev, name: clean } : prev)
     fetchAll()
-    // Обновляем локально
-    setSelectedMember(prev => ({ ...prev, [field]: value }))
+  }
+
+  function selectedMemberUserId(member = selectedMember) {
+    return member?.friend_id || member?.user_id || member?.user?.id || member?.friend?.id || null
+  }
+
+  async function loadPrivacyDraft(member = selectedMember) {
+    const viewerId = selectedMemberUserId(member)
+    if (!viewerId) return
+
+    setPrivacySaved(false)
+
+    const { data: saved } = await supabase
+      .from('sharing_permissions')
+      .select('*')
+      .eq('owner_id', user.id)
+      .eq('viewer_id', viewerId)
+      .maybeSingle()
+
+    setPrivacyDraft({
+      can_see_status: saved?.can_view_status ?? true,
+      can_see_availability: saved?.can_view_availability ?? true,
+      can_see_calendar: saved?.can_view_calendar ?? member.can_see_calendar ?? member.is_visible ?? false,
+      can_see_mood: saved?.can_view_mood ?? member.can_see_mood ?? false,
+      can_see_cycle_summary: saved?.can_view_cycle_summary ?? false,
+      can_see_period_days: saved?.can_view_period_days ?? false,
+      can_see_sport: saved?.can_view_sport ?? false,
+      can_see_notes: saved?.can_view_notes ?? member.can_see_notes ?? false,
+      can_see_medications: saved?.can_view_medications ?? false,
+      can_see_pregnancy: saved?.can_view_pregnancy ?? member.can_see_pregnancy ?? false,
+      can_receive_ai_advice: saved?.can_receive_ai_advice ?? member.can_receive_ai_advice ?? false,
+      can_receive_cycle_notifs: saved?.can_receive_cycle_notifs ?? member.can_receive_cycle_notifs ?? false,
+      advice_source: saved?.advice_source ?? member.advice_source ?? 'calendar',
+      advice_detail: saved?.advice_detail ?? member.advice_detail ?? 'general',
+    })
+  }
+
+  function updatePrivacy(type, value) {
+    setPrivacyDraft(prev => ({ ...(prev || {}), [type]: value }))
+    setPrivacySaved(false)
+  }
+
+  async function savePrivacy() {
+    if (!selectedMember || !privacyDraft) return
+    const viewerId = selectedMemberUserId()
+    if (!viewerId) return
+
+    setPrivacySaving(true)
+
+    const payload = {
+      owner_id: user.id,
+      viewer_id: viewerId,
+      can_view_status: !!privacyDraft.can_see_status,
+      can_view_availability: !!privacyDraft.can_see_availability,
+      can_view_calendar: !!privacyDraft.can_see_calendar,
+      can_view_mood: !!privacyDraft.can_see_mood,
+      can_view_cycle_summary: !!privacyDraft.can_see_cycle_summary,
+      can_view_period_days: !!privacyDraft.can_see_period_days,
+      can_view_sport: !!privacyDraft.can_see_sport,
+      can_view_notes: !!privacyDraft.can_see_notes,
+      can_view_medications: !!privacyDraft.can_see_medications,
+      can_view_pregnancy: !!privacyDraft.can_see_pregnancy,
+      can_receive_ai_advice: !!privacyDraft.can_receive_ai_advice,
+      can_receive_cycle_notifs: !!privacyDraft.can_receive_cycle_notifs,
+      advice_source: privacyDraft.advice_source || 'calendar',
+      advice_detail: privacyDraft.advice_detail || 'general',
+      updated_at: new Date().toISOString(),
+    }
+
+    const { error } = await supabase
+      .from('sharing_permissions')
+      .upsert(payload, { onConflict:'owner_id,viewer_id' })
+
+    if (!error) {
+      // Дублируем основной доступ в старые таблицы, чтобы старые экраны тоже видели настройку.
+      if (selectedMember.source === 'friendship') {
+        await supabase
+          .from('friendships')
+          .update({ is_visible: !!privacyDraft.can_see_calendar })
+          .eq('id', selectedMember.id)
+      } else if (selectedMember.source !== 'friendship') {
+        await supabase
+          .from('group_members')
+          .update({
+            can_see_calendar: !!privacyDraft.can_see_calendar,
+            can_see_mood: !!privacyDraft.can_see_mood,
+            can_see_notes: !!privacyDraft.can_see_notes,
+            can_receive_ai_advice: !!privacyDraft.can_receive_ai_advice,
+            can_receive_cycle_notifs: !!privacyDraft.can_receive_cycle_notifs,
+            can_see_pregnancy: !!privacyDraft.can_see_pregnancy,
+            advice_source: privacyDraft.advice_source || 'calendar',
+            advice_detail: privacyDraft.advice_detail || 'general',
+          })
+          .eq('id', selectedMember.id)
+      }
+
+      setSelectedMember(prev => ({ ...(prev || {}), ...privacyDraft }))
+      setPrivacySaved(true)
+      fetchAll()
+    } else {
+      alert(rl('Не удалось сохранить настройки доступа', 'Could not save access settings'))
+    }
+
+    setPrivacySaving(false)
   }
 
   const usedColors = [
@@ -401,7 +563,16 @@ export default function FriendsPage() {
         <button onClick={() => setView('main')} style={{ background:'none', border:'none', color:'var(--text2)', cursor:'pointer', fontSize:13, display:'flex', alignItems:'center', gap:6, padding:0 }}>
           ‹ {rl('Назад','Back')}
         </button>
-        <h2 style={{ fontSize:28 }}>{group.name}</h2>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+          <div>
+            <h2 style={{ fontSize:28 }}>{group.name}</h2>
+            <div style={{ fontSize:12, color:'var(--text3)', marginTop:4 }}>{rl('Групповой календарь и участники', 'Group calendar and members')}</div>
+          </div>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+            <PrettyButton onClick={() => navigate(`/sync?group=${group.id}`)} style={{ padding:'9px 11px', fontSize:12 }}>📅 {rl('Календарь','Calendar')}</PrettyButton>
+            {group.isOwner && <PrettyButton onClick={() => renameGroup(group)} style={{ padding:'9px 11px', fontSize:12 }}>✎ {rl('Имя','Name')}</PrettyButton>}
+          </div>
+        </div>
 
         {/* Код группы */}
         <div className="card">
@@ -436,11 +607,24 @@ export default function FriendsPage() {
                     <div style={{ fontSize:14, color:'var(--text)' }}>{m.user?.name}</div>
                     <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
                       {lang==='en' ? RELATION_TYPES[m.relation_type]?.labelEn : RELATION_TYPES[m.relation_type]?.labelRu}
+                      {circlePrepActive && <> · 🕊 {prepRoleText(m.user, lang)}</>}
                     </div>
                   </div>
                   <button
+                    onClick={() => navigate(`/person/${m.user_id}`)}
+                    style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
+                  >
+                    {rl('Профиль','Profile')}
+                  </button>
+                  <button
+                    onClick={() => navigate(`/sync?person=${m.user_id}`)}
+                    style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
+                  >
+                    {rl('Календарь','Calendar')}
+                  </button>
+                  <button
                     onClick={() => { setSelectedMember({...m, source:'group_member'}); setView('privacy') }}
-                    style={{ background:'none', border:'1px solid var(--border)', borderRadius:6, color:'var(--text2)', fontSize:11, padding:'5px 10px', cursor:'pointer' }}
+                    style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
                   >
                     {rl('Доступ','Access')}
                   </button>
@@ -464,9 +648,10 @@ export default function FriendsPage() {
 
   if (view === 'privacy' && selectedMember) {
     const memberName = selectedMember.user?.name || selectedMember.friend?.name || '?'
-    const aiEnabled = selectedMember.can_receive_ai_advice
-    const currentSource = selectedMember.advice_source || 'calendar'
-    const currentDetail = selectedMember.advice_detail || 'general'
+    const draft = privacyDraft || {}
+    const aiEnabled = !!draft.can_receive_ai_advice
+    const currentSource = draft.advice_source || 'calendar'
+    const currentDetail = draft.advice_detail || 'general'
 
     const SOURCES = [
       {
@@ -533,12 +718,12 @@ export default function FriendsPage() {
     function Toggle({ value, onChange }) {
       return (
         <button onClick={() => onChange(!value)} style={{
-          width:44, height:24, borderRadius:12, cursor:'pointer', border:'none', flexShrink:0,
-          background: value ? 'var(--accent)' : 'var(--bg3)', position:'relative', transition:'all 0.2s',
+          width:52, height:30, borderRadius:999, cursor:'pointer', border:'1px solid rgba(255,255,255,0.12)', flexShrink:0,
+          background: value ? 'linear-gradient(135deg, var(--accent), #fff2)' : 'linear-gradient(135deg, rgba(255,255,255,0.12), rgba(255,255,255,0.04))', position:'relative', transition:'all 0.2s', boxShadow:value?'0 8px 22px rgba(0,0,0,0.24)':'none',
         }}>
           <div style={{
-            position:'absolute', top:2, left: value ? 22 : 2,
-            width:20, height:20, borderRadius:'50%', background:'#fff',
+            position:'absolute', top:3, left: value ? 25 : 3,
+            width:24, height:24, borderRadius:'50%', background:'#fff',
             transition:'left 0.2s', boxShadow:'0 1px 3px rgba(0,0,0,0.2)',
           }} />
         </button>
@@ -555,19 +740,49 @@ export default function FriendsPage() {
           <p style={{ fontSize:13, color:'var(--text2)', marginTop:4 }}>{memberName}</p>
         </div>
 
+        <div className="card" style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:12, position:'sticky', top:0, zIndex:2 }}>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:13, color:'var(--text)' }}>{rl('Настройки доступа','Access settings')}</div>
+            <div style={{ fontSize:11, color: privacySaved ? 'var(--accent)' : 'var(--text3)', marginTop:3 }}>
+              {privacySaved
+                ? rl('Сохранено','Saved')
+                : rl('Измени настройки и нажми “Сохранить”.', 'Change settings and tap “Save”.')}
+            </div>
+          </div>
+          <button
+            onClick={savePrivacy}
+            disabled={privacySaving || !privacyDraft}
+            style={{
+              border:'1px solid rgba(255,255,255,0.18)', borderRadius:16, padding:'11px 16px', cursor: privacySaving ? 'default' : 'pointer',
+              background: privacySaving ? 'var(--bg3)' : 'linear-gradient(135deg, var(--accent), #ffffff33)', color:'#0a0a0a', fontSize:13, fontWeight:700,
+              opacity: privacySaving ? 0.65 : 1,
+            }}
+          >
+            {privacySaving ? rl('Сохраняю...','Saving...') : rl('Сохранить','Save')}
+          </button>
+        </div>
+
         {/* Базовые переключатели */}
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           {[
-            { key:'can_see_calendar', icon:'📅', ru:'Видит мой календарь', en:'Can see my calendar' },
+            { key:'can_see_status', icon:'🟢', ru:'Видит общий статус', en:'Can see general status' },
+            { key:'can_see_availability', icon:'🪟', ru:'Видит доступные окошки', en:'Can see availability windows' },
+            { key:'can_see_calendar', icon:'📅', ru:'Видит мой календарь по дням', en:'Can see my calendar by days' },
+            { key:'can_see_mood', icon:'🌙', ru:'Видит настроение', en:'Can see mood' },
+            { key:'can_see_sport', icon:'🏃', ru:'Видит активность и нагрузку', en:'Can see activity and load' },
+            { key:'can_see_cycle_summary', icon:'🔄', ru:'Видит кратко цикл', en:'Can see cycle summary' },
+            { key:'can_see_period_days', icon:'🩸', ru:'Видит дни месячных', en:'Can see period days' },
+            { key:'can_see_notes', icon:'🏷', ru:'Видит теги/заметки без текста дневника', en:'Can see tags/notes without diary text' },
+            { key:'can_see_medications', icon:'💊', ru:'Видит напоминания о препаратах', en:'Can see medication reminders' },
             { key:'can_receive_cycle_notifs', icon:'🔔', ru:'Получает уведомления о цикле', en:'Gets cycle notifications' },
             { key:'can_receive_ai_advice', icon:'✦', ru:'Получает AI-советы обо мне', en:'Gets AI advice about me' },
             { key:'can_see_pregnancy', icon:'🌸', ru:'Видит трекер беременности', en:'Can see pregnancy tracker' },
           ].map(item => (
-            <div key={item.key} className="card" style={{ padding:'12px 16px', display:'flex', alignItems:'center', gap:12 }}>
+            <div key={item.key} className="card" style={{ padding:'14px 16px', display:'flex', alignItems:'center', gap:12, border:'1px solid rgba(255,255,255,0.10)', background:'linear-gradient(135deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02))' }}>
               <span style={{ fontSize:18 }}>{item.icon}</span>
               <div style={{ flex:1, fontSize:13, color:'var(--text)' }}>{lang==='en'?item.en:item.ru}</div>
               <Toggle
-                value={!!selectedMember[item.key]}
+                value={!!draft[item.key]}
                 onChange={v => updatePrivacy(item.key, v)}
               />
             </div>
@@ -653,12 +868,40 @@ export default function FriendsPage() {
     )
   }
 
+  const circlePrepActive = hasPregnancyPrep(profile)
+
   // MAIN VIEW
   return (
     <div className="page-enter" style={{ flex:1, display:'flex', flexDirection:'column', padding:'20px 16px', gap:16, overflowY:'auto' }}>
-      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between' }}>
-        <h2 style={{ fontSize:30 }}>{rl('Мой круг','My Circle')}</h2>
+      <div className="card" style={{ padding:'18px', display:'flex', alignItems:'center', justifyContent:'space-between', gap:14, background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.025))' }}>
+        <div>
+          <h2 style={{ fontSize:32, margin:0 }}>{rl('Мой круг','My Circle')}</h2>
+          <p style={{ fontSize:12, color:'var(--text3)', margin:'5px 0 0', lineHeight:1.45 }}>
+            {rl('Люди, группы, доступы и общий календарь без квеста “угадай кнопку”.','People, groups, access and shared calendar without button archaeology.')}
+          </p>
+        </div>
+        <PrettyButton onClick={() => navigate('/sync')} variant="primary" style={{ whiteSpace:'nowrap' }}>
+          📅 {rl('Общий календарь','Shared calendar')}
+        </PrettyButton>
       </div>
+
+      <PrettyButton onClick={() => navigate('/sync')} variant="primary" style={{ width:'100%', padding:'15px 16px', fontSize:15 }}>
+        ✨ {rl('Подобрать совместный досуг','Plan shared activity')}
+      </PrettyButton>
+
+      {circlePrepActive && (
+        <div className="card" style={{ padding:'15px', border:'1px solid rgba(134,239,172,0.28)', background:'linear-gradient(135deg, rgba(74,222,128,0.10), rgba(255,255,255,0.025))' }}>
+          <div style={{ display:'flex', gap:10, alignItems:'flex-start' }}>
+            <span style={{ fontSize:24 }}>🕊</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:15, fontWeight:800, color:'var(--text)' }}>{rl('Совместная подготовка к беременности', 'Joint pregnancy preparation')}</div>
+              <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.5, marginTop:4 }}>
+                {rl('Открой профиль партнёра или участника группы: Elara покажет карточки задач по полу, режиму тела и доступным данным.', 'Open a partner or group member profile: Elara will show task cards based on gender, body mode, and shared data.')}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Две главные кнопки */}
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10 }}>
@@ -730,11 +973,24 @@ export default function FriendsPage() {
                   <div style={{ fontSize:14, color:'var(--text)' }}>{f.friend?.name}</div>
                   <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
                     {f.is_visible ? rl('Цикл виден','Cycle visible') : rl('Цикл скрыт','Cycle hidden')}
+                    {circlePrepActive && <> · 🕊 {prepRoleText(f.friend, lang)}</>}
                   </div>
                 </div>
                 <button
+                  onClick={() => navigate(`/person/${f.friend_id}`)}
+                  style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
+                >
+                  {rl('Профиль','Profile')}
+                </button>
+                <button
+                  onClick={() => navigate(`/sync?person=${f.friend_id}`)}
+                  style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
+                >
+                  {rl('Календарь','Calendar')}
+                </button>
+                <button
                   onClick={() => { setSelectedMember({...f, source:'friendship', user:{name:f.friend?.name}, can_see_calendar:f.is_visible}); setView('privacy') }}
-                  style={{ background:'none', border:'1px solid var(--border)', borderRadius:6, color:'var(--text2)', fontSize:11, padding:'5px 10px', cursor:'pointer' }}
+                  style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
                 >
                   {rl('Доступ','Access')}
                 </button>

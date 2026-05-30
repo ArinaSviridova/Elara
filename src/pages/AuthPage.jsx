@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
+import { supabase } from '../lib/supabase'
 
 export default function AuthPage() {
   const { signIn, signUp, signInWithGoogle } = useAuth()
@@ -10,6 +11,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
   const [isTeen, setIsTeen] = useState(false)
+  const [promoCode, setPromoCode] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
@@ -26,6 +28,16 @@ export default function AuthPage() {
     } else {
       if (!name.trim()) { setError(rl('Введи своё имя', 'Enter your name')); setLoading(false); return }
       const { error } = await signUp(email, password, name, isTeen)
+      if (!error && promoCode.trim()) {
+        // Применяем промокод после регистрации
+        try {
+          const { data: promo } = await supabase
+            .from('promo_codes').select('*').eq('code', promoCode.trim().toUpperCase()).maybeSingle()
+          if (promo && promo.uses < promo.max_uses) {
+            await supabase.from('promo_codes').update({ uses: promo.uses + 1 }).eq('id', promo.id)
+          }
+        } catch {}
+      }
       if (error) setError(error.message)
       else setSuccess(rl('Проверь почту — мы отправили письмо', 'Check your email — we sent a link'))
     }
@@ -66,6 +78,11 @@ export default function AuthPage() {
                 🌸 {rl('Мне до 18','I\'m under 18')}
               </button>
             </div>
+            <input
+              placeholder={rl('Промокод (если есть)','Promo code (optional)')}
+              value={promoCode} onChange={e => setPromoCode(e.target.value.toUpperCase())}
+              style={{ letterSpacing:'0.08em' }}
+            />
           </>
         )}
 

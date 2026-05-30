@@ -26,13 +26,13 @@ const TEEN_TIPS = {
   },
 }
 
-export default function TeenSetupPage({ onDone, initialStep = 1 }) {
+export default function TeenSetupPage({ onDone }) {
   const { user, profile, updateProfile } = useAuth()
   const { addParent } = useTeen()
   const { lang } = useLang()
   const rl = (ru, en) => lang === 'en' ? en : ru
 
-  const [step, setStep] = useState(initialStep) // 1=возраст, 2=объяснение, 3=родитель, 4=готово
+  const [step, setStep] = useState(1) // 1=возраст, 2=объяснение, 3=родитель, 4=готово
   const [birthYear, setBirthYear] = useState('')
   const [parentCode, setParentCode] = useState('')
   const [hidePartner, setHidePartner] = useState(false)
@@ -208,6 +208,23 @@ export default function TeenSetupPage({ onDone, initialStep = 1 }) {
       <p style={{ fontSize:14, color:'var(--text2)', lineHeight:1.7 }}>
         {rl('Приложение настроено для тебя. Помни — здесь всё твоё, в безопасности.', 'The app is set up for you. Remember — everything here is yours, safe and private.')}
       </p>
+
+
+
+      {/* Приватность — скрытые разделы */}
+      <div style={{ padding:'14px', background:'rgba(248,113,113,0.06)', borderRadius:12, border:'1px solid rgba(248,113,113,0.15)', marginBottom:4 }}>
+        <div style={{ fontSize:13, fontWeight:500, marginBottom:6 }}>🔒 {rl('Двойной PIN (необязательно)', 'Dual PIN (optional)')}</div>
+        <p style={{ fontSize:12, color:'var(--text2)', lineHeight:1.5, margin:'0 0 8px' }}>
+          {rl(
+            'Можно настроить два PIN-кода: реальный открывает всё приложение, ложный — скрывает интимные разделы. Удобно если кто-то смотрит через плечо.',
+            'Set two PINs: real one opens everything, decoy one hides intimate sections. Useful if someone is looking over your shoulder.'
+          )}
+        </p>
+        <div style={{ fontSize:11, color:'var(--text3)' }}>
+          {rl('Настроить можно в Профиль → Безопасность', 'Set up in Profile → Security')}
+        </div>
+      </div>
+
       <button className="btn btn-primary" onClick={onDone}>
         {rl('Начать','Start')}
       </button>

@@ -38,7 +38,6 @@ export default function FeedbackPage() {
   const [openFaq, setOpenFaq] = useState(null)
   const [type, setType] = useState('bug')
   const [message, setMessage] = useState('')
-  const [email, setEmail] = useState(user?.email || '')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const [error, setError] = useState('')
@@ -52,7 +51,7 @@ export default function FeedbackPage() {
         body: {
           userId: user?.id,
           userName: profile?.name,
-          userEmail: email,
+          userEmail: user?.email,
           type,
           message: message.trim(),
           lang,
@@ -131,11 +130,6 @@ export default function FeedbackPage() {
                 </button>
               ))}
             </div>
-          </div>
-
-          <div>
-            <div style={{ fontSize:11, color:'var(--text3)', marginBottom:5 }}>Email</div>
-            <input type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="email@example.com" />
           </div>
 
           <div>

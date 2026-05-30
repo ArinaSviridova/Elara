@@ -1,7 +1,10 @@
-import { useAuth } from '../context/AuthContext'
-import { useLang } from '../context/LangContext'
-import AIAdvice from '../components/AIAdvice'
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../context/AuthContext'
+import { useLang, useRl } from '../context/LangContext'
+import AIAdvice from '../components/AIAdvice'
+import DayStatusWidget from '../components/DayStatusWidget'
+import InfoTooltip from '../components/InfoTooltip'
 import { supabase } from '../lib/supabase'
 
 const MOOD_EMOJI = {
@@ -13,24 +16,24 @@ const MOOD_EMOJI = {
 const BODY_MODE_INFO = {
   no_period: {
     emoji: '🌙',
-    titleRu: 'Твоё пространство',
-    titleEn: 'Your space',
-    descRu: 'Здесь твои персональные рекомендации, настроение и дневник — без привязки к циклу.',
-    descEn: 'Here are your personal recommendations, mood and diary — not cycle-based.',
+    titleRu: 'Твоё пространство', titleEn: 'Your space',
+    descRu: 'Персональные рекомендации, настроение и дневник — без привязки к циклу.',
+    descEn: 'Personal recommendations, mood and diary — not cycle-based.',
+    tabRu: 'Моё', tabEn: 'Mine',
   },
   menopause: {
     emoji: '🌸',
-    titleRu: 'Менопауза',
-    titleEn: 'Menopause',
+    titleRu: 'Мой день', titleEn: 'My day',
     descRu: 'Рекомендации адаптированы под твои потребности.',
     descEn: 'Recommendations are adapted to your needs.',
+    tabRu: 'Мой день', tabEn: 'My day',
   },
   on_hormones: {
     emoji: '💊',
-    titleRu: 'Гормональная терапия',
-    titleEn: 'Hormone therapy',
-    descRu: 'Не забывай принимать гормоны вовремя. AI советы учитывают твой режим.',
-    descEn: 'Don\'t forget your hormones on time. AI advice considers your regimen.',
+    titleRu: 'Мой день', titleEn: 'My day',
+    descRu: 'Не забывай принимать гормоны вовремя.',
+    descEn: "Don't forget your hormones on time.",
+    tabRu: 'Здоровье', tabEn: 'Health',
   },
 }
 
@@ -47,38 +50,42 @@ const HORMONE_TIPS = {
   ],
 }
 
-export default function NoPeriodPage({ bodyMode }) {
-  const { user } = useAuth()
-  const { lang } = useLang()
-  const rl = (ru, en) => lang === 'en' ? en : ru
+export default function NoPeriodPage({ bodyMode, modules: modulesProp }) {
+  const activeModules = modulesProp || {
+    hormones: bodyMode === 'on_hormones',
+    menopause: bodyMode === 'menopause',
+    pregnancy: bodyMode === 'pregnant',
+    symptoms: true, medications: true, moodTracking: true,
+  }
+  const { user, profile } = useAuth()
+  const { t, lang } = useLang()
+  const rl = useRl()
+  const navigate = useNavigate()
   const today = new Date().toISOString().slice(0,10)
-  const [todayMood, setTodayMood] = useState(null)
+  const [todayMoods, setTodayMoods] = useState([])
 
   const info = BODY_MODE_INFO[bodyMode] || BODY_MODE_INFO.no_period
   const tips = HORMONE_TIPS[bodyMode] || []
 
   useEffect(() => {
     supabase.from('mood_entries').select('mood').eq('user_id', user.id).eq('date', today)
-      .maybeSingle().then(({ data }) => { if (data) setTodayMood(data.mood) })
+      .then(({ data }) => {
+        if (data) setTodayMoods(data.map(d => d.mood).filter(Boolean))
+      })
   }, [])
 
   async function saveMood(mood) {
-    if (todayMood === mood) {
-      await supabase.from('mood_entries').delete().eq('user_id', user.id).eq('date', today)
-      setTodayMood(null)
+    if (todayMoods.includes(mood)) {
+      await supabase.from('mood_entries').delete().eq('user_id', user.id).eq('date', today).eq('mood', mood)
+      setTodayMoods(prev => prev.filter(m => m !== mood))
     } else {
-      await supabase.from('mood_entries').upsert(
-        { user_id: user.id, date: today, mood },
-        { onConflict: 'user_id,date' }
-      )
-      setTodayMood(mood)
+      await supabase.from('mood_entries').insert({ user_id: user.id, date: today, mood })
+      setTodayMoods(prev => [...prev, mood])
     }
   }
 
   return (
     <div className="page-enter" style={{ flex:1, display:'flex', flexDirection:'column', padding:'24px 20px', gap:16, overflowY:'auto' }}>
-
-      {/* Заголовок */}
       <div style={{ textAlign:'center', padding:'20px 0 8px' }}>
         <div style={{ fontSize:48, marginBottom:8 }}>{info.emoji}</div>
         <h2 style={{ fontSize:28, fontFamily:'Cormorant Garamond, serif' }}>
@@ -89,7 +96,34 @@ export default function NoPeriodPage({ bodyMode }) {
         </p>
       </div>
 
-      {/* Напоминания о гормонах */}
+      <DayStatusWidget />
+
+
+      {/* Быстрые разделы здоровья */}
+      <div className="card" style={{ padding:'14px', display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em' }}>
+          {rl('Здоровье и уход','Health & care')}
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          {[
+            { icon:'💊', label:rl('Таблетки','Medications'), path:'/medications' },
+            { icon:'🏃', label:rl('Спорт и активность','Sport & activity'), path:'/sport' },
+            { icon:'🩺', label:rl('Настройки здоровья','Health settings'), path:'/health' },
+            { icon:'🔬', label:rl('Архив анализов','Health archive'), path:'/health-archive' },
+          ].map(item => (
+            <button key={item.path} onClick={() => navigate(item.path)} style={{
+              padding:'12px 10px', borderRadius:12, cursor:'pointer', textAlign:'left',
+              border:'1px solid var(--border)', background:'var(--bg2)', color:'var(--text)',
+              display:'flex', alignItems:'center', gap:8, minHeight:48,
+            }}>
+              <span style={{ fontSize:18 }}>{item.icon}</span>
+              <span style={{ fontSize:12, lineHeight:1.25 }}>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Напоминания */}
       {tips.length > 0 && (
         <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
           <div style={{ fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em' }}>
@@ -107,45 +141,77 @@ export default function NoPeriodPage({ bodyMode }) {
         </div>
       )}
 
-      {/* Настроение */}
+      {/* Настроение — мульти-выбор с подписями */}
       <div className="card" style={{ padding:'14px' }}>
         <div style={{ fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
-          {rl('Как ты сегодня?','How are you today?')}
+          {t.moodToday || rl('Как ты сегодня?','How are you today?')}
         </div>
-        <div style={{ display:'flex', flexWrap:'wrap', gap:8 }}>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
           {Object.entries(MOOD_EMOJI).map(([mood, emoji]) => (
-            <button key={mood} onClick={() => saveMood(mood)} title={mood} style={{
-              padding:'8px 11px', borderRadius:20, fontSize:16, cursor:'pointer',
-              border:`1.5px solid ${todayMood===mood?'var(--accent)':'transparent'}`,
-              background:todayMood===mood?'var(--accent-soft)':'var(--bg3)',
-              transition:'all 0.15s',
-            }}>{emoji}</button>
+            <button key={mood} onClick={() => saveMood(mood)} style={{
+              padding:'6px 10px', borderRadius:20, cursor:'pointer',
+              border:`1.5px solid ${todayMoods.includes(mood)?'var(--accent)':'transparent'}`,
+              background:todayMoods.includes(mood)?'var(--accent-soft)':'var(--bg3)',
+              transition:'all 0.15s', display:'flex', alignItems:'center', gap:5,
+            }}>
+              <span style={{ fontSize:16 }}>{emoji}</span>
+              <span style={{ fontSize:11, color:todayMoods.includes(mood)?'var(--accent)':'var(--text3)' }}>
+                {t[mood] || mood}
+              </span>
+            </button>
           ))}
         </div>
-        {todayMood && (
-          <div style={{ fontSize:12, color:'var(--text2)', marginTop:8 }}>{todayMood}</div>
+        {todayMoods.length > 0 && (
+          <div style={{ fontSize:12, color:'var(--text2)', marginTop:8 }}>
+            {todayMoods.map(m => t[m]||m).join(' · ')}
+          </div>
         )}
       </div>
 
-      {/* AI совет */}
-      <AIAdvice
-        requestType="self_advice"
-        todayMood={todayMood}
-        label={rl('✦ Персональный совет', '✦ Personal advice')}
-      />
+      {/* Спортивный блок для мужчин и без месячных */}
+      {(bodyMode === 'no_period' || bodyMode === 'menopause' || bodyMode === 'on_hormones') && (
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          <div style={{ fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em' }}>
+            🏃 {rl('Активность и спорт','Activity & sport')}
+          </div>
+          {[
+            { emoji:'💪', title:rl('Силовые тренировки','Strength'), tip:rl('Сила зависит от тестостерона и кортизола. Лучший результат — утром при пике гормонов.','Strength depends on testosterone and cortisol. Best results in the morning.') },
+            { emoji:'🧘', title:rl('Восстановление','Recovery'), tip:rl('Хронический стресс снижает тестостерон. Медитация и сон — часть тренировки.','Chronic stress lowers testosterone. Meditation and sleep are part of training.') },
+            { emoji:'🏊', title:rl('Кардио','Cardio'), tip:rl('Умеренное кардио улучшает настроение через эндорфины. Не переусердствуй — избыток снижает тестостерон.','Moderate cardio improves mood via endorphins. Don\'t overdo — excess lowers testosterone.') },
+          ].map((item, i) => (
+            <div key={i} className="card" style={{ padding:'12px 14px', display:'flex', gap:12 }}>
+              <span style={{ fontSize:22, flexShrink:0 }}>{item.emoji}</span>
+              <div>
+                <div style={{ fontSize:12, fontWeight:500, marginBottom:3 }}>{item.title}</div>
+                <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.5 }}>{item.tip}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-      {/* Напоминание о лекарствах */}
+      <AIAdvice requestType="self_advice" todayMood={todayMoods[0]}
+        label={rl('✦ Персональный совет','✦ Personal advice')} />
+
       {bodyMode === 'on_hormones' && (
         <div style={{ background:'rgba(167,139,250,0.1)', borderRadius:12, padding:'14px 16px', border:'1px solid rgba(167,139,250,0.3)' }}>
           <div style={{ fontSize:13, fontWeight:500, marginBottom:6 }}>
             💊 {rl('Гормоны сегодня?','Hormones today?')}
           </div>
           <p style={{ fontSize:12, color:'var(--text2)', margin:0, lineHeight:1.5 }}>
-            {rl('Зайди в раздел Таблетки чтобы отметить приём и настроить напоминание.',
-               'Go to Medications to log your intake and set a reminder.')}
+            {rl('Зайди в Таблетки чтобы отметить приём.','Go to Medications to log your intake.')}
           </p>
         </div>
       )}
+
+      {/* Трекер дисфории — только для ГАТ режима */}
+      {bodyMode === 'on_hormones' && (
+        <button onClick={() => window.location.href='/dysphoria'} className="btn btn-ghost"
+          style={{ display:'flex', alignItems:'center', gap:10, justifyContent:'flex-start', borderColor:'rgba(167,139,250,0.4)', color:'#a78bfa' }}>
+          💜 {rl('Дневник дисфории','Dysphoria journal')}
+        </button>
+      )}
+
     </div>
   )
 }

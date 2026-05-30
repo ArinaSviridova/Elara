@@ -28,11 +28,30 @@ export function AuthProvider({ children }) {
     setLoading(false)
   }
 
-  async function signUp(email, password, name) {
-    const { error } = await supabase.auth.signUp({
+  async function signUp(email, password, name, isTeen = false) {
+    const ageMode = isTeen ? 'teen' : 'adult'
+    const { data, error } = await supabase.auth.signUp({
       email, password,
-      options: { data: { name } }
+      options: {
+        data: {
+          name,
+          age_mode: ageMode,
+          is_teen: Boolean(isTeen),
+        }
+      }
     })
+
+    // Если Supabase сразу вернул user, создаём/обновляем профиль.
+    // Если включено email-confirmation, metadata всё равно сохранится в auth.users.
+    if (!error && data?.user?.id) {
+      await supabase.from('profiles').upsert({
+        id: data.user.id,
+        name,
+        age_mode: ageMode,
+        is_teen: Boolean(isTeen),
+      }, { onConflict: 'id' })
+    }
+
     return { error }
   }
 

@@ -18,6 +18,20 @@ export default function AIAdvice({
   const [loading, setLoading] = useState(false)
   const rl = (ru, en, be) => lang === 'en' ? en : (lang === 'be' ? (be || ru) : ru)
 
+  // Перевод технических ключей фаз
+  const translatePhase = (phase) => {
+    const PHASE_LABELS = {
+      period:     rl('Менструация', 'Period'),
+      pms:        rl('ПМС', 'PMS'),
+      ovulation:  rl('Овуляция', 'Ovulation'),
+      fertile:    rl('Фертильное окно', 'Fertile window'),
+      follicular: rl('Фолликулярная фаза', 'Follicular phase'),
+      luteal:     rl('Лютеиновая фаза', 'Luteal phase'),
+      regular:    rl('Обычный день', 'Regular day'),
+    }
+    return PHASE_LABELS[phase] || phase
+  }
+
   async function fetchAdvice() {
     setLoading(true)
     setAdvice('')
@@ -66,12 +80,12 @@ export default function AIAdvice({
         <div>
           <div style={{ fontSize:13, fontWeight:500, color:'var(--text)', display:'flex', alignItems:'center', gap:6 }}>
             <span style={{ color:'var(--accent)' }}>✦</span>
-            {label || rl('Совет на сегодня', "Today's advice", 'Парада на сёння')}
+            {label || rl('Совет на сегодня', "Today’s advice", 'Парада на сёння')}
           </div>
           {!advice && !loading && (
             <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
               {cyclePhase
-                ? rl(`Фаза: ${cyclePhase}`, `Phase: ${cyclePhase}`, `Фаза: ${cyclePhase}`)
+                ? rl(`Фаза: ${translatePhase(cyclePhase)}`, `Phase: ${translatePhase(cyclePhase)}`, `Фаза: ${translatePhase(cyclePhase)}`)
                 : rl('Персональный — нажми чтобы получить', 'Personal — tap to get', 'Персанальны — націсні')}
             </div>
           )}

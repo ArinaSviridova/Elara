@@ -78,12 +78,19 @@ input::placeholder { color: var(--text3); }
   transition: all 0.2s;
 }
 .btn-primary {
-  background: var(--accent);
-  color: var(--bg);
+  background: linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 75%, #c084fc));
+  color: #fff;
+  box-shadow: 0 2px 14px color-mix(in srgb, var(--accent) 30%, transparent);
+  letter-spacing: 0.02em;
 }
-.btn-primary:hover { opacity: 0.88; }
+.btn-primary:hover:not(:disabled) {
+  box-shadow: 0 4px 22px color-mix(in srgb, var(--accent) 45%, transparent);
+  transform: translateY(-1px);
+  opacity: 1;
+}
+.btn-primary:active:not(:disabled) { transform: scale(0.97); }
 .btn-ghost {
-  background: transparent;
+  background: var(--bg2);
   border: 1px solid var(--border);
   color: var(--text2);
 }

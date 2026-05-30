@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
@@ -67,7 +68,46 @@ const SYMPTOM_OPTIONS = [
 
 const EMOTION_OPTIONS = ['радость', 'тревога', 'умиротворение', 'страх', 'нетерпение', 'усталость', 'любовь', 'растерянность']
 
+
+// Карточка совета с навигацией
+function TipCard({ tip, navigate, lang }) {
+  const [open, setOpen] = useState(false)
+  const rl = (ru, en) => lang === 'en' ? en : ru
+  return (
+    <div style={{ borderRadius:12, border:'1px solid var(--border)', overflow:'hidden' }}>
+      <button onClick={() => setOpen(p=>!p)} style={{
+        width:'100%', padding:'12px 14px', background:'var(--bg2)', border:'none',
+        cursor:'pointer', display:'flex', alignItems:'center', gap:10, textAlign:'left',
+      }}>
+        <span style={{ fontSize:20, flexShrink:0 }}>{tip.emoji}</span>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:13, fontWeight:500, color:'var(--text)' }}>{tip.title}</div>
+        </div>
+        <span style={{ color:'var(--text3)', fontSize:12, transition:'transform 0.2s', transform:open?'rotate(180deg)':'none' }}>▼</span>
+      </button>
+      {open && (
+        <div style={{ padding:'0 14px 14px', background:'var(--bg2)', borderTop:'1px solid var(--border)' }}>
+          <p style={{ fontSize:13, color:'var(--text2)', lineHeight:1.6, margin:'10px 0' }}>{tip.body}</p>
+          {tip.ref && (
+            <div style={{ fontSize:11, color:'var(--text3)', padding:'6px 10px', background:'var(--bg3)', borderRadius:8, marginBottom:10, lineHeight:1.5 }}>
+              📚 {tip.refText}
+            </div>
+          )}
+          <button onClick={() => navigate(tip.url)} style={{
+            width:'100%', padding:'10px', borderRadius:10,
+            background:'var(--accent-soft)', border:'1px solid var(--accent)',
+            color:'var(--accent)', fontSize:13, cursor:'pointer', fontWeight:500,
+          }}>
+            {tip.label} →
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function PregnancyPage() {
+  const navigate = useNavigate()
   const { user, profile, updateProfile } = useAuth()
   const { lang } = useLang()
   const rl = (ru, en) => lang === 'en' ? en : ru
@@ -83,6 +123,8 @@ export default function PregnancyPage() {
   const [kicks, setKicks] = useState('')
   const [water, setWater] = useState('')
   const [meds, setMeds] = useState({ folic_acid: false, iron: false, vitamin_d: false })
+  const [customVitamins, setCustomVitamins] = useState([])
+  const [newVitamin, setNewVitamin] = useState('')
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -179,6 +221,7 @@ export default function PregnancyPage() {
           { id:'info', label:rl('Плод','Baby') },
           { id:'events', label:rl('Скрининги','Screenings') },
           { id:'meds', label:rl('Витамины','Vitamins') },
+          { id:'prep', label:rl('Подготовка','Prep') },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} style={{
             flex:1, padding:'10px 4px', background:'none', border:'none', cursor:'pointer',
@@ -365,11 +408,152 @@ export default function PregnancyPage() {
               ⚠️ {rl('Все витамины и дозировки — только по согласованию с врачом. Информация носит ознакомительный характер.', 'All vitamins and dosages — only as agreed with your doctor. Information is for reference only.')}
             </div>
 
+            {/* Свои витамины */}
+            <div className="card" style={{ padding:'14px' }}>
+              <div style={{ fontSize:13, fontWeight:500, marginBottom:10 }}>
+                + {rl('Мои витамины','My vitamins')}
+              </div>
+              <div style={{ display:'flex', gap:8, marginBottom:10 }}>
+                <input placeholder={rl('Название витамина...','Vitamin name...')}
+                  value={newVitamin} onChange={e => setNewVitamin(e.target.value)}
+                  style={{ flex:1 }} />
+                <button type="button" onClick={() => {
+                  if (newVitamin.trim()) {
+                    setCustomVitamins(p => [...p, { name: newVitamin.trim(), taken: false }])
+                    setNewVitamin('')
+                  }
+                }} style={{ background:'var(--accent-soft)', border:'1px solid var(--border)', borderRadius:8, color:'var(--accent)', padding:'0 14px', cursor:'pointer', fontSize:12, flexShrink:0 }}>
+                  + {rl('Добавить','Add')}
+                </button>
+              </div>
+              {customVitamins.map((v, i) => (
+                <div key={i} style={{ display:'flex', alignItems:'center', gap:10, padding:'8px 0', borderTop:'1px solid var(--border)' }}>
+                  <span style={{ fontSize:16 }}>💊</span>
+                  <span style={{ flex:1, fontSize:13 }}>{v.name}</span>
+                  <button onClick={() => setCustomVitamins(p => p.map((x,j) => j===i?{...x,taken:!x.taken}:x))} style={{
+                    width:40, height:22, borderRadius:11, cursor:'pointer', border:'none', flexShrink:0,
+                    background:v.taken?'var(--accent)':'var(--bg3)', position:'relative', transition:'all 0.2s',
+                  }}>
+                    <div style={{ position:'absolute', top:2, left:v.taken?20:2, width:18, height:18, borderRadius:'50%', background:'#fff', transition:'left 0.2s' }} />
+                  </button>
+                  <button onClick={() => setCustomVitamins(p => p.filter((_,j) => j!==i))} style={{ background:'none', border:'none', color:'var(--text3)', cursor:'pointer', fontSize:16 }}>×</button>
+                </div>
+              ))}
+            </div>
+
             <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
               {saved ? '✓' : saving ? '...' : rl('Сохранить','Save')}
             </button>
           </div>
         )}
+
+
+        {/* ТАБ: ПОДГОТОВКА */}
+        {tab === 'prep' && (
+          <div style={{ display:'flex', flexDirection:'column', gap:14 }}>
+            <div style={{ background:'rgba(248,113,113,0.08)', borderRadius:10, padding:'12px 14px', fontSize:12, color:'var(--text2)', lineHeight:1.6, border:'1px solid rgba(248,113,113,0.2)' }}>
+              ⚠️ {rl('Спорт во время беременности и при подготовке к ней - только если врач не ограничивал нагрузку. При боли, кровотечении, головокружении, сильной одышке или резком ухудшении самочувствия тренировку нужно остановить и обратиться за медицинской помощью.',
+                       'Exercise during pregnancy and preconception - only if your clinician has not restricted activity. Stop and seek medical help with pain, bleeding, dizziness, strong shortness of breath or sudden worsening.')}
+            </div>
+
+            <div className="card" style={{ padding:'14px' }}>
+              <div style={{ fontSize:13, fontWeight:500, marginBottom:8 }}>🌿 {rl('До беременности: что укреплять','Before pregnancy: what to prepare')}</div>
+              <p style={{ fontSize:12, color:'var(--text2)', lineHeight:1.6, margin:'0 0 10px' }}>
+                {rl('Цель - не “убиться в зале”, а спокойно подготовить тазовое дно, ягодицы, ноги, спину, дыхание и выносливость. Человеческое тело почему-то требует обслуживания, как старый ноутбук, но с эмоциями.',
+                   'The goal is not to destroy yourself at the gym, but to prepare pelvic floor, glutes, legs, back, breathing and endurance.')}
+              </p>
+              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+                {[
+                  ['🫧', rl('Дыхание + тазовое дно','Breathing + pelvic floor')],
+                  ['🍑', rl('Ягодичный мост','Glute bridge')],
+                  ['🪑', rl('Присед к стулу','Chair squat')],
+                  ['🦵', rl('Step-up / выпады назад','Step-up / reverse lunge')],
+                  ['🧘', rl('Мобилити бёдер и таза','Hip and pelvic mobility')],
+                  ['🚶', rl('Ходьба / плавание','Walking / swimming')],
+                  ['🧱', rl('Bird-dog / dead bug','Bird-dog / dead bug')],
+                  ['🎗', rl('Тяга резинки к себе','Resistance band rows')],
+                ].map(([emoji, label]) => (
+                  <div key={label} style={{ padding:'9px 10px', borderRadius:10, background:'var(--bg3)', fontSize:12, color:'var(--text2)', lineHeight:1.35 }}>
+                    <span style={{ marginRight:6 }}>{emoji}</span>{label}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="card" style={{ padding:'14px' }}>
+              <div style={{ fontSize:13, fontWeight:500, marginBottom:8 }}>📅 {rl('Мягкий недельный шаблон','Gentle weekly template')}</div>
+              {[
+                rl('2 раза в неделю - силовая 20-30 минут: ноги, ягодицы, спина, кор.','2 times/week - strength 20-30 min: legs, glutes, back, core.'),
+                rl('3-5 раз в неделю - ходьба или лёгкое кардио 20-40 минут.','3-5 times/week - walking or light cardio 20-40 min.'),
+                rl('3-5 минут в день - тазовое дно: сокращение, удержание и обязательно расслабление.','3-5 min/day - pelvic floor: contractions, holds and relaxation.'),
+                rl('1-2 раза в неделю - мобилити таза, бёдер и грудного отдела.','1-2 times/week - pelvic, hip and thoracic mobility.'),
+              ].map((text, i) => (
+                <div key={i} style={{ display:'flex', gap:8, fontSize:12, color:'var(--text2)', lineHeight:1.55, marginBottom:7 }}>
+                  <span style={{ color:'var(--accent)' }}>✓</span><span>{text}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="card" style={{ padding:'14px' }}>
+              <div style={{ fontSize:13, fontWeight:500, marginBottom:8 }}>🤰 {rl('Во время беременности','During pregnancy')}</div>
+              <p style={{ fontSize:12, color:'var(--text2)', lineHeight:1.6, margin:0 }}>
+                {rl('После наступления беременности приложение должно снизить интенсивность рекомендаций и показывать только безопасные общие варианты: ходьба, мягкая мобилити, дыхание, тазовое дно - если врач не против. Никаких “героических” тренировок, потому что героизм в приложениях обычно заканчивается кнопкой “удалить”.',
+                   'Once pregnant, the app should lower intensity and show only general safe options: walking, gentle mobility, breathing, pelvic floor - if your clinician agrees.')}
+              </p>
+            </div>
+          </div>
+        )}
+
+
+      {/* ── Советы с навигацией ─────────────────────────────────────── */}
+      <div style={{ padding:'16px' }}>
+        <div style={{ fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:10 }}>
+          Советы и навигация
+        </div>
+        <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+          {[
+            {
+              emoji:'💊', title:'Препараты и витамины',
+              body:'Фолиевая кислота, железо, витамин D — обсуди с врачом. Все назначения только по рекомендации.',
+              url:'/health', label:'Открыть Здоровье',
+              ref:'PMID26462967', refText:'Фолиевая кислота снижает риск дефектов нервной трубки на 70%',
+            },
+            {
+              emoji:'📅', title:'Визиты и скрининги',
+              body:'Первый скрининг 10–13 нед, второй 18–21 нед, УЗИ 32 нед. Ведите записи всех визитов.',
+              url:'/health', label:'Архив анализов',
+              ref:'ACOG', refText:'Рекомендации Американской коллегии акушеров-гинекологов',
+            },
+            {
+              emoji:'🩸', title:'Цикл и дни до этого',
+              body:'Посмотри историю цикла чтобы уточнить дату последних месячных для расчёта срока.',
+              url:'/calendar', label:'Открыть Календарь',
+              ref:'WHO', refText:'ВОЗ: расчёт срока по последней менструации',
+            },
+            {
+              emoji:'🏃', title:'Активность',
+              body:'Умеренная активность безопасна в большинстве случаев. 30 мин ходьбы в день — хорошее начало. Спорт — по согласованию с врачом.',
+              url:'/sport', label:'Дневник активности',
+              ref:'PMID31582291', refText:'Физическая активность снижает риск гестационного диабета',
+            },
+            {
+              emoji:'😴', title:'Сон и самочувствие',
+              body:'Отмечай самочувствие каждый день: тошнота, усталость, настроение. Это поможет врачу.',
+              url:'/today', label:'Отметить сегодня',
+              ref:null, refText:null,
+            },
+            {
+              emoji:'🫂', title:'Партнёр и поддержка',
+              body:'Если есть партнёр — подключи его к подготовке. Совместное планирование снижает тревогу.',
+              url:'/friends', label:'Открыть Круг',
+              ref:'PMID28989900', refText:'Поддержка партнёра связана с лучшими исходами беременности',
+            },
+          ].map((tip, i) => (
+            <TipCard key={i} tip={tip} navigate={navigate} lang={lang} />
+          ))}
+        </div>
+      </div>
+
       </div>
     </div>
   )
