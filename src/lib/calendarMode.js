@@ -68,11 +68,24 @@ export function resolveCalendarConfig(profile = {}) {
   const age = getAge(profile)
   const teen = isTeenProfile(profile)
 
+  // Определяем пол — мужчинам не показываем цикл без явного включения
+  const rawGender = profile?.gender || profile?.gender_identity || ''
+  const isMaleProfile = ['cis_man', 'trans_man', 'male', 'man'].includes(rawGender)
+  // Явное включение цикла в body_modules перекрывает гендер (напр. трансмужчина с циклом)
+  const explicitCycleEnabled = Array.isArray(profile?.body_modules) && profile.body_modules.includes('cycle')
+  const maleWithoutCycle = isMaleProfile && !explicitCycleEnabled
+
+  // Режимы без месячных
+  const noPeriodsMode = ['amenorrhea', 'menopause', 'prefer_not', 'male'].includes(bodyMode)
+
   const wantsCycle =
-    bodyMode === 'menstruating' ||
-    health?.show_cycle === true ||
-    modules?.cycleMoodLibido === true ||
-    modules?.cycle === true
+    !maleWithoutCycle &&
+    !noPeriodsMode && (
+      bodyMode === 'menstruating' ||
+      health?.show_cycle === true ||
+      modules?.cycleMoodLibido === true ||
+      modules?.cycle === true
+    )
 
   const wantsPreconception =
     bodyMode === 'pregnancy_planning' ||

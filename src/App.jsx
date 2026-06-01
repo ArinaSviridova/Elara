@@ -71,9 +71,9 @@ function AppShell() {
       <TeenProvider>
         <TeenGate>
           <TrialBanner />
-          <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column' }}>
+          <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', paddingTop:'env(safe-area-inset-top, 0px)' }}>
             <Routes>
-              <Route path="/" element={<Navigate to="/today" replace />} />
+              <Route path="/" element={<Navigate to="/profile" replace />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/friends" element={<FriendsPage />} />
               <Route path="/diary" element={<DiaryPage />} />

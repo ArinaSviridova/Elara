@@ -445,6 +445,30 @@ export default function OnboardingPage({ onComplete, defaultReturn = '/profile' 
               {saving ? rl('Сохраняю...','Saving...') : rl('Сохранить и начать','Save and start')}
             </button>
           </div>
+
+          {/* Подсказка: где всё найти потом */}
+          <div style={{ padding:'12px 14px', background:'rgba(167,139,250,0.06)', borderRadius:12, border:'1px solid rgba(167,139,250,0.2)' }}>
+            <div style={{ fontSize:12, color:'var(--accent)', fontWeight:500, marginBottom:8 }}>
+              💡 {rl('Где найти всё это потом:', 'Where to find everything later:')}
+            </div>
+            <div style={{ display:'flex', flexDirection:'column', gap:5 }}>
+              {[
+                { icon:'🧬', path: rl('Профиль → Режим тела', 'Profile → Body mode'), desc: rl('Цикл, беременность, менопауза, гормоны', 'Cycle, pregnancy, menopause, hormones') },
+                { icon:'✦', path: rl('Профиль → Персонализация AI', 'Profile → AI personalization'), desc: rl('Жанры, стиль советов, модули', 'Genres, advice style, modules') },
+                { icon:'🔒', path: rl('Профиль → Приватность', 'Profile → Privacy'), desc: rl('Кто видит твои данные', 'Who sees your data') },
+                { icon:'👥', path: rl('Круг', 'Circle'), desc: rl('Добавить людей, настроить доступы', 'Add people, manage access') },
+                { icon:'💡', path: rl('Профиль → Как работает Elara', 'Profile → How Elara works'), desc: rl('Полный гайд по логике приложения', 'Full guide to app logic') },
+              ].map((item, idx) => (
+                <div key={idx} style={{ display:'flex', gap:8, alignItems:'flex-start', fontSize:12, color:'var(--text2)' }}>
+                  <span style={{ flexShrink:0 }}>{item.icon}</span>
+                  <div>
+                    <span style={{ color:'var(--text)', fontWeight:500 }}>{item.path}</span>
+                    {' — '}{item.desc}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </section>
       )}
     </div>

@@ -58,6 +58,8 @@ export default function AIAdvice({
             diaryTags: diaryTags || diary?.tags || [],
             bodyMode: profile?.body_mode,
             gender: profile?.gender,
+            addressStyle: profile?.address_style || 'auto',
+            pronouns: profile?.pronouns || '',
             pregnancyWeek: profile?.pregnancy_week,
             personalityTags: profile?.personality_tags || [],
             carePrefs: profile?.preferences?.care_prefs || [],

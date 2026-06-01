@@ -18,7 +18,23 @@ const WORKOUT_TYPES = [
   { key:'run', emoji:'🏃', ru:'Бег', en:'Running' },
   { key:'cycle', emoji:'🚴', ru:'Велосипед', en:'Cycling' },
   { key:'sex', emoji:'🌹', ru:'Интимная активность', en:'Intimate activity' },
-  { key:'rest', emoji:'😴', ru:'Активный отдых', en:'Active rest' },
+  { key:'rest',       emoji:'😴', ru:'Активный отдых', en:'Active rest' },
+  { key:'skate',      emoji:'🛹', ru:'Скейт',          en:'Skateboarding' },
+  { key:'martial',    emoji:'🥊', ru:'Боевые искусства',en:'Martial arts' },
+  { key:'crossfit',   emoji:'🏋️', ru:'Кроссфит',        en:'CrossFit' },
+  { key:'boxing',     emoji:'🥊', ru:'Бокс',            en:'Boxing' },
+  { key:'dance',      emoji:'💃', ru:'Танцы',           en:'Dancing' },
+  { key:'hiit',       emoji:'⚡', ru:'ВИИТ',            en:'HIIT' },
+  { key:'pilates',    emoji:'🧘', ru:'Пилатес',         en:'Pilates' },
+  { key:'custom',     emoji:'✏️', ru:'Своё',            en:'Custom' },
+,
+  { key:'skate',   emoji:'🛹', ru:'Скейт',           en:'Skateboarding' },
+  { key:'martial', emoji:'🥊', ru:'Боевые искусства', en:'Martial arts' },
+  { key:'boxing',  emoji:'🥊', ru:'Бокс',             en:'Boxing' },
+  { key:'crossfit',emoji:'🏋️', ru:'Кроссфит',         en:'CrossFit' },
+  { key:'dance',   emoji:'💃', ru:'Танцы',             en:'Dancing' },
+  { key:'pilates', emoji:'🧘', ru:'Пилатес',           en:'Pilates' },
+  { key:'custom',  emoji:'✏️', ru:'Своё (вручную)',    en:'Custom (manual)' },
 ]
 
 const SUPPLEMENTS = [
@@ -47,6 +63,7 @@ export default function SportPage() {
   const today = new Date().toISOString().slice(0,10)
 
   const [workouts, setWorkouts] = useState([])
+  const [customWorkout, setCustomWorkout] = useState('')
   const [supplements, setSupplements] = useState([])
   const [intensity, setIntensity] = useState('moderate')
   const [duration, setDuration] = useState(30)
@@ -73,6 +90,7 @@ export default function SportPage() {
       setIntensity(data.intensity || 'moderate')
       setDuration(data.duration || 30)
       setNotes(data.notes || '')
+      setCustomWorkout(data.custom_workout || '')
       setTodayLog(data)
     }
   }
@@ -81,7 +99,7 @@ export default function SportPage() {
     setSaving(true)
     await supabase.from('sport_logs').upsert({
       user_id: user.id, date: today,
-      workouts, supplements, intensity, duration, notes
+      workouts, supplements, intensity, duration, notes, custom_workout: customWorkout
     }, { onConflict: 'user_id,date' })
     setSaving(false); setSaved(true)
     setTimeout(() => setSaved(false), 2000)
@@ -130,6 +148,18 @@ export default function SportPage() {
             </button>
           ))}
         </div>
+        {/* Ручной ввод для своей активности */}
+        {workouts.includes('custom') && (
+          <div style={{ marginTop:8 }}>
+            <input
+              value={customWorkout}
+              onChange={e => setCustomWorkout(e.target.value)}
+              placeholder={rl('Введи название активности...','Enter activity name...')}
+              style={{ width:'100%', padding:'9px 12px', borderRadius:10, border:'1px solid var(--border)',
+                background:'var(--bg2)', color:'var(--text)', fontSize:13 }}
+            />
+          </div>
+        )}
       </div>
 
       {/* Интенсивность + длительность */}

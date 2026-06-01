@@ -275,8 +275,23 @@ Consider the user's specified intake times. Always add: "⚠️ Confirm with doc
         ? (isRu ? `Режим тела: ${ctx.profile.body_mode}.` : `Body mode: ${ctx.profile.body_mode}.`) : ''
       const orientationPart = ctx.profile?.orientation && ctx.profile.orientation !== 'prefer_not'
         ? (isRu ? `Ориентация: ${ctx.profile.orientation}.` : `Orientation: ${ctx.profile.orientation}.`) : ''
-      const genderPart = ctx.profile?.gender && ctx.profile.gender !== 'prefer_not' && ctx.profile.gender !== 'female'
-        ? (isRu ? `Гендер: ${ctx.profile.gender}.` : `Gender: ${ctx.profile.gender}.`) : ''
+      const genderPart = (() => {
+        const g = ctx.profile?.gender || contextOverride?.gender || ''
+        const addr = ctx.profile?.address_style || contextOverride?.addressStyle || 'auto'
+        const pronouns = ctx.profile?.pronouns || contextOverride?.pronouns || ''
+        if (!g || g === 'prefer_not') return ''
+        // Строим явную инструкцию по обращению
+        let addrInstruction = ''
+        if (addr === 'male' || g === 'cis_man' || g === 'trans_man' || g === 'male') {
+          addrInstruction = isRu ? 'Обращайся к пользователю в мужском роде (он/его/ему). НЕ используй женский род.' : 'Address the user as male (he/him). Do NOT use female pronouns.'
+        } else if (addr === 'neutral' || g === 'nonbinary' || g === 'genderfluid' || g === 'agender') {
+          addrInstruction = isRu ? 'Обращайся к пользователю нейтрально (они/их) или избегай родовых окончаний.' : 'Address the user in neutral/they/them. Avoid gendered language.'
+        } else if (addr === 'female' || g === 'cis_woman' || g === 'trans_woman' || g === 'female') {
+          addrInstruction = isRu ? 'Обращайся к пользователю в женском роде (она/её).' : 'Address the user as female (she/her).'
+        }
+        if (pronouns) addrInstruction += isRu ? ` Местоимения: ${pronouns}.` : ` Pronouns: ${pronouns}.`
+        return addrInstruction
+      })()
       const personalityPart = (ctx.profile?.personality_tags || []).length > 0
         ? (isRu ? `Характер: ${ctx.profile.personality_tags.join(', ')}.` : `Personality: ${ctx.profile.personality_tags.join(', ')}.`) : ''
       const carePart = (ctx.profile?.preferences?.care_prefs || contextOverride?.carePrefs || []).length > 0

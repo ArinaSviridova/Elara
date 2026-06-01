@@ -170,7 +170,13 @@ export function resolveProfileModules(profile = {}) {
   const bodyModules = resolveBodyModules(profile)
   const has = key => bodyModules.includes(key) || (key === 'sperm_related_fertility' && bodyModules.includes('sperm_fertility')) || (key === 'sperm_fertility' && bodyModules.includes('sperm_related_fertility'))
   const spermSide = has('sperm_related_fertility') || has('sperm_fertility') || ['cis_man', 'trans_woman'].includes(gender)
-  const cycleSide = has('cycle') || ['cis_woman', 'trans_man'].includes(gender)
+  // Мужчина без явного включения цикла — цикл не показываем
+  const rawGenderPm = profile?.gender || profile?.gender_identity || ''
+  const isMaleProfilePm = ['cis_man', 'male', 'man'].includes(rawGenderPm)
+  const explicitCyclePm = has('cycle')
+  const cycleSide = explicitCyclePm || (
+    ['cis_woman', 'trans_man'].includes(gender) && !isMaleProfilePm
+  ) || (isMaleProfilePm && explicitCyclePm)
 
   const modules = {
     cycle: false,
@@ -204,7 +210,9 @@ export function resolveProfileModules(profile = {}) {
     dysphoria: false,
   }
 
-  if (has('cycle') || bodyMode === 'menstruating') {
+  // Для мужчин цикл включается ТОЛЬКО если явно добавлен в body_modules
+  const isMalePm = ['cis_man', 'male', 'man'].includes(rawGenderPm)
+  if ((has('cycle') || bodyMode === 'menstruating') && (!isMalePm || has('cycle'))) {
     modules.cycle = true
     modules.periodPrediction = true
     modules.bleedingTracking = true

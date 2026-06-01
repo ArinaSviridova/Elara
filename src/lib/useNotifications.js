@@ -191,7 +191,7 @@ export function useUnreadCount(userId) {
     if (!userId) return
     let cancelled = false
 
-    async function fetch() {
+    async function fetchCount() {
       const { count: c } = await supabase
         .from('app_notifications')
         .select('id', { count: 'exact', head: true })
@@ -201,10 +201,33 @@ export function useUnreadCount(userId) {
       if (!cancelled) setCount(c || 0)
     }
 
-    fetch()
-    // Polling раз в 30 секунд - не создаёт Realtime конфликтов
-    const interval = setInterval(fetch, 30000)
-    return () => { cancelled = true; clearInterval(interval) }
+    fetchCount()
+    // Polling раз в 15 секунд
+    const interval = setInterval(fetchCount, 15000)
+
+    // Realtime — мгновенное обновление бейджа при новом уведомлении
+    const channelName = `unread_${userId}_${Date.now()}`
+    const channel = supabase
+      .channel(channelName)
+      .on('postgres_changes', {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'app_notifications',
+        filter: `user_id=eq.${userId}`,
+      }, () => { fetchCount() })
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'app_notifications',
+        filter: `user_id=eq.${userId}`,
+      }, () => { fetchCount() })
+      .subscribe()
+
+    return () => {
+      cancelled = true
+      clearInterval(interval)
+      supabase.removeChannel(channel)
+    }
   }, [userId])
 
   return count

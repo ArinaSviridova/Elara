@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import AIAdvice from '../components/AIAdvice'
+import { DnDActivityButton } from '../components/DnDWidget'
 import { isPregnancyPlanningActive, loadPregnancyToggles, savePregnancyToggles, pendingPregnancyItems, pregnancyPlanningItems, togglePregnancyItemStatus, addPregnancyDraft } from '../lib/pregnancyPlanningUi'
 
 function safeJson(key, fallback) {
@@ -392,6 +393,28 @@ export default function TodayPage() {
         🔎 {rl('Найти таблетки, анализы, тесты, прививки...', 'Find meds, labs, tests, vaccines...')}
       </button>
 
+
+      {/* D20 / Оракул — если включено в профиле */}
+      <DnDActivityButton />
+
+      {/* Тесты — всегда видны */}
+      <div style={{ padding:'12px 14px', background:'var(--bg2)', borderRadius:14, border:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+        <div>
+          <div style={{ fontSize:13, fontWeight:500 }}>🧪 {rl('Клинические тесты', 'Clinical tests')}</div>
+          <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+            {testCount > 0
+              ? rl(`Пройдено: ${testCount}`, `Completed: ${testCount}`)
+              : rl('PHQ-9, GAD-7, АСРС и другие', 'PHQ-9, GAD-7, ASRS and more')}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => navigate('/tests')}
+          style={{ background:'var(--accent-soft)', border:'1px solid var(--border)', color:'var(--accent)', borderRadius:10, padding:'8px 14px', cursor:'pointer', fontSize:12, fontWeight:500, flexShrink:0 }}
+        >
+          {rl('Открыть', 'Open')} →
+        </button>
+      </div>
 
       {pregnancyActive && (
         <section

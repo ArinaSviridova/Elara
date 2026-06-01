@@ -57,6 +57,15 @@ export default function AuthPage() {
       <form onSubmit={handleSubmit} style={{ display:'flex', flexDirection:'column', gap:12 }}>
         {mode === 'register' && (
           <>
+            {/* Пояснение что будет после регистрации */}
+            <div style={{ padding:'12px 14px', background:'rgba(167,139,250,0.07)', borderRadius:12, border:'1px solid rgba(167,139,250,0.2)', fontSize:12, color:'var(--text2)', lineHeight:1.7 }}>
+              <div style={{ fontWeight:600, color:'var(--text)', marginBottom:6 }}>
+                ✦ {rl('После входа:', 'After signing in:')}
+              </div>
+              <div>🧬 {rl('Настроишь режим тела и цели — займёт 2 минуты', 'Set up your body mode and goals — takes 2 min')}</div>
+              <div>🔒 {rl('Все данные приватны по умолчанию — ты выбираешь кто видит', 'All data private by default — you choose who sees')}</div>
+              <div>💡 {rl('Не хочешь заполнять сейчас — всё есть в Профиле', "Don't want to fill in now — everything is in Profile")}</div>
+            </div>
             <input placeholder={rl('Твоё имя','Your name')} value={name} onChange={e => setName(e.target.value)} autoComplete="name" />
 
             {/* Вопрос о возрасте при регистрации */}

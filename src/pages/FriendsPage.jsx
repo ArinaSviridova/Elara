@@ -62,6 +62,7 @@ export default function FriendsPage() {
   const [joinError, setJoinError] = useState('')
 
   const [copied, setCopied] = useState('')
+  const [excludedFriends, setExcludedFriends] = useState([])
 
   useEffect(() => { fetchAll() }, [])
   useEffect(() => {
@@ -79,14 +80,56 @@ export default function FriendsPage() {
     }, { onConflict: 'owner_id,friend_id' })
   }
 
+  async function removeFriend(friendId) {
+    const msg = lang === 'en'
+      ? 'Remove this person from your circle?'
+      : 'Удалить этого человека из круга?'
+    if (!confirm(msg)) return
+
+    // Скрываем карточку мгновенно
+    setExcludedFriends(prev => [...prev, friendId])
+
+    // 1. Удаляем человека из ВСЕХ групп где он участник (любой владелец)
+    //    Это предотвращает восстановление через mirrorGroupsToFriends
+    await supabase.from('group_members')
+      .delete()
+      .eq('user_id', friendId)
+
+    // 2. Удаляем нас из групп которыми владеет этот человек
+    //    Находим группы где owner = friendId и мы участник
+    const { data: theirGroups } = await supabase
+      .from('groups')
+      .select('id')
+      .eq('owner_id', friendId)
+    for (const g of (theirGroups || [])) {
+      await supabase.from('group_members').delete()
+        .eq('group_id', g.id).eq('user_id', user.id)
+    }
+
+    // 3. Удаляем friendship
+    const { error: rpcErr } = await supabase.rpc('remove_friendship', {
+      p_user_id: user.id, p_friend_id: friendId,
+    })
+    if (rpcErr) {
+      await supabase.from('friendships').delete()
+        .eq('owner_id', user.id).eq('friend_id', friendId)
+      await supabase.from('friendships').delete()
+        .eq('owner_id', friendId).eq('friend_id', user.id)
+    }
+
+    // 4. Обновляем UI — excludedFriends защитит от восстановления mirrorGroups
+    fetchAll()
+  }
+
   async function mirrorGroupsToFriends(allGroups) {
     const tasks = []
     ;(allGroups || []).forEach(g => {
       if (g.isOwner) {
         ;(g.members || []).forEach(m => {
-          if (m.user_id && m.user_id !== user.id) tasks.push(ensureFriendship(m.user_id, m.relation_type || 'friend', m.member_color || '#f472b6'))
+          if (m.user_id && m.user_id !== user.id && !excludedFriends.includes(m.user_id))
+            tasks.push(ensureFriendship(m.user_id, m.relation_type || 'friend', m.member_color || '#f472b6'))
         })
-      } else if (g.owner_id && g.owner_id !== user.id) {
+      } else if (g.owner_id && g.owner_id !== user.id && !excludedFriends.includes(g.owner_id)) {
         tasks.push(ensureFriendship(g.owner_id, g.myMembership?.relation_type || 'friend', g.myMembership?.member_color || '#f472b6'))
       }
     })
@@ -964,36 +1007,48 @@ export default function FriendsPage() {
             {rl('Отдельные','Individual')}
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {individualConnections.map(f => (
-              <div key={f.id} className="card" style={{ padding:'12px 14px', display:'flex', alignItems:'center', gap:12 }}>
-                <div style={{ width:36, height:36, borderRadius:'50%', background:f.friend_color, flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center', fontSize:14, color:'#0a0a0a', fontWeight:600 }}>
-                  {f.friend?.name?.[0]?.toUpperCase()}
-                </div>
-                <div style={{ flex:1 }}>
-                  <div style={{ fontSize:14, color:'var(--text)' }}>{f.friend?.name}</div>
-                  <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
-                    {f.is_visible ? rl('Цикл виден','Cycle visible') : rl('Цикл скрыт','Cycle hidden')}
-                    {circlePrepActive && <> · 🕊 {prepRoleText(f.friend, lang)}</>}
+            {individualConnections.filter(f => !excludedFriends.includes(f.friend_id)).map(f => (
+              <div key={f.id} className="card" style={{ padding:'12px 14px' }}>
+                <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+                  <div style={{ width:36, height:36, borderRadius:'50%', background:f.friend_color,
+                    flexShrink:0, display:'flex', alignItems:'center', justifyContent:'center',
+                    fontSize:14, color:'#0a0a0a', fontWeight:600 }}>
+                    {f.friend?.name?.[0]?.toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontSize:14, color:'var(--text)', fontWeight:500 }}>{f.friend?.name}</div>
+                    <div style={{ fontSize:11, color:'var(--text3)', marginTop:1 }}>
+                      {f.is_visible ? rl('Цикл виден','Cycle visible') : rl('Цикл скрыт','Cycle hidden')}
+                      {circlePrepActive && <> · 🕊 {prepRoleText(f.friend, lang)}</>}
+                    </div>
                   </div>
                 </div>
-                <button
-                  onClick={() => navigate(`/person/${f.friend_id}`)}
-                  style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
-                >
-                  {rl('Профиль','Profile')}
-                </button>
-                <button
-                  onClick={() => navigate(`/sync?person=${f.friend_id}`)}
-                  style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
-                >
-                  {rl('Календарь','Calendar')}
-                </button>
-                <button
-                  onClick={() => { setSelectedMember({...f, source:'friendship', user:{name:f.friend?.name}, can_see_calendar:f.is_visible}); setView('privacy') }}
-                  style={{ background:'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03))', border:'1px solid rgba(255,255,255,0.12)', borderRadius:12, color:'var(--text2)', fontSize:11, padding:'7px 10px', cursor:'pointer', boxShadow:'0 6px 16px rgba(0,0,0,0.16)' }}
-                >
-                  {rl('Доступ','Access')}
-                </button>
+                <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+                  <button onClick={() => navigate(`/person/${f.friend_id}`)}
+                    style={{ flex:'1 1 60px', padding:'7px 8px', borderRadius:10,
+                      border:'1px solid var(--border)', background:'var(--bg3)',
+                      color:'var(--text2)', fontSize:12, cursor:'pointer' }}>
+                    {rl('Профиль','Profile')}
+                  </button>
+                  <button onClick={() => navigate(`/sync?person=${f.friend_id}`)}
+                    style={{ flex:'1 1 60px', padding:'7px 8px', borderRadius:10,
+                      border:'1px solid var(--border)', background:'var(--bg3)',
+                      color:'var(--text2)', fontSize:12, cursor:'pointer' }}>
+                    {rl('Календарь','Calendar')}
+                  </button>
+                  <button onClick={() => { setSelectedMember({...f, source:'friendship', user:{name:f.friend?.name}, can_see_calendar:f.is_visible}); setView('privacy') }}
+                    style={{ flex:'1 1 60px', padding:'7px 8px', borderRadius:10,
+                      border:'1px solid var(--border)', background:'var(--bg3)',
+                      color:'var(--text2)', fontSize:12, cursor:'pointer' }}>
+                    {rl('Доступ','Access')}
+                  </button>
+                  <button onClick={() => removeFriend(f.friend_id)}
+                    style={{ flex:'1 1 60px', padding:'7px 8px', borderRadius:10,
+                      border:'1px solid rgba(248,113,113,0.4)', background:'rgba(248,113,113,0.08)',
+                      color:'#f87171', fontSize:12, cursor:'pointer', fontWeight:500 }}>
+                    {rl('Удалить','Remove')}
+                  </button>
+                </div>
               </div>
             ))}
           </div>

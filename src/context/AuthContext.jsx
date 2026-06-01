@@ -70,6 +70,10 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     await supabase.auth.signOut()
+    setUser(null)
+    setProfile(null)
+    // Очищаем кэш админки при выходе
+    try { localStorage.removeItem('elara_is_admin') } catch {}
   }
 
   async function updateProfile(updates) {

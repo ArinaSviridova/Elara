@@ -244,14 +244,44 @@ export default function AdminPage() {
 
   if (tab === 'stats') return (
     <TabWrapper title="📊 Статистика">
+      <button onClick={loadStats} className="btn btn-ghost" style={{ fontSize:12, width:'auto', padding:'8px 16px' }}>
+        🔄 Обновить
+      </button>
+      {!stats && (
+        <div style={{ color:'var(--text3)', fontSize:13, textAlign:'center', padding:'20px' }}>
+          Нажми «Обновить» чтобы загрузить статистику
+        </div>
+      )}
       {stats && (
         <>
+          {/* Числа */}
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            {[
+              { label:'Всего пользователей', value: stats.total ?? '—', color:'var(--accent)' },
+              { label:'Plus подписки', value: stats.plus ?? '—', color:'#a78bfa' },
+              { label:'Family подписки', value: stats.family ?? '—', color:'#f472b6' },
+              { label:'Trial', value: stats.trial ?? '—', color:'#4ade80' },
+            ].map(item => (
+              <div key={item.label} className="card" style={{ padding:'14px', textAlign:'center' }}>
+                <div style={{ fontSize:28, fontWeight:700, color:item.color }}>{item.value}</div>
+                <div style={{ fontSize:11, color:'var(--text3)', marginTop:4 }}>{item.label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* Последние регистрации */}
           <div className="card" style={{ padding:'12px' }}>
-            <div style={{ fontSize:11, color:'var(--text3)', marginBottom:8 }}>Последние регистрации</div>
+            <div style={{ fontSize:12, fontWeight:600, marginBottom:10 }}>📅 Последние регистрации</div>
+            {stats.recent.length === 0 && (
+              <div style={{ color:'var(--text3)', fontSize:12 }}>Нет данных</div>
+            )}
             {stats.recent.map(u => (
-              <div key={u.id} style={{ display:'flex', justifyContent:'space-between', padding:'5px 0', borderBottom:'1px solid var(--border)', fontSize:12 }}>
-                <span>{u.name || '—'}</span>
-                <span style={{ color:'var(--text3)' }}>{u.language||'ru'} · {new Date(u.created_at).toLocaleDateString('ru')}</span>
+              <div key={u.id} style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'6px 0', borderBottom:'1px solid var(--border)', fontSize:12 }}>
+                <div>
+                  <span style={{ fontWeight:500 }}>{u.name || '—'}</span>
+                  <span style={{ color:'var(--text3)', marginLeft:8 }}>{u.language||'ru'}</span>
+                </div>
+                <span style={{ color:'var(--text3)', fontSize:11 }}>{new Date(u.created_at).toLocaleDateString('ru')}</span>
               </div>
             ))}
           </div>
@@ -263,30 +293,67 @@ export default function AdminPage() {
   if (tab === 'users') return (
     <TabWrapper title="👥 Пользователи">
       <div style={{ display:'flex', gap:8 }}>
-        <input placeholder="Поиск по имени..." value={searchQuery} onChange={e=>setSearchQuery(e.target.value)}
+        <input placeholder="Поиск по имени или email... (пусто = последние 20)" value={searchQuery}
+          onChange={e=>setSearchQuery(e.target.value)}
           onKeyDown={e=>e.key==='Enter'&&searchUser()} style={{ flex:1 }} />
         <button onClick={searchUser} className="btn btn-ghost" style={{ width:'auto', padding:'0 14px', fontSize:12 }}>🔍</button>
       </div>
+      {!searchResult && (
+        <button onClick={searchUser} className="btn btn-ghost" style={{ fontSize:12 }}>
+          Показать последних пользователей
+        </button>
+      )}
       {searchResult?.map(u => (
-        <div key={u.id} className="card" style={{ padding:'12px' }}>
-          <div style={{ display:'flex', justifyContent:'space-between', marginBottom:8 }}>
+        <div key={u.id} className="card" style={{ padding:'14px' }}>
+          {/* Шапка: имя + план */}
+          <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:10 }}>
             <div>
-              <div style={{ fontSize:14, fontWeight:500 }}>{u.name||'Без имени'}</div>
-              <div style={{ fontSize:10, color:'var(--text3)' }}>{u.id}</div>
+              <div style={{ fontSize:15, fontWeight:600 }}>{u.name || 'Без имени'}</div>
+              <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>{u.email || 'email не указан'}</div>
+              <div style={{ fontSize:10, color:'var(--text3)', marginTop:1, fontFamily:'monospace' }}>{u.id}</div>
             </div>
-            <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'var(--bg3)', color:PLAN_COLORS[u.subscription?.[0]?.plan||'free'] }}>
-              {u.subscription?.[0]?.plan||'free'}
-            </span>
+            <div style={{ display:'flex', flexDirection:'column', alignItems:'flex-end', gap:4 }}>
+              <span style={{ fontSize:11, padding:'2px 8px', borderRadius:20, background:'var(--bg3)', color:PLAN_COLORS[u.subscription?.[0]?.plan||'free'] }}>
+                {u.subscription?.[0]?.plan||'free'}
+              </span>
+              <span style={{ fontSize:10, color:'var(--text3)' }}>
+                {u.created_at ? new Date(u.created_at).toLocaleDateString('ru') : '—'}
+              </span>
+            </div>
           </div>
+
+          {/* Доп инфо */}
+          <div style={{ fontSize:11, color:'var(--text3)', marginBottom:10, display:'flex', gap:10, flexWrap:'wrap' }}>
+            <span>🧬 {u.body_mode || 'не указан'}</span>
+            <span>🌐 {u.language || 'ru'}</span>
+            <span>📱 {u.age_mode || 'adult'}</span>
+            {u.banned && <span style={{ color:'#f87171' }}>🚫 Заблокирован</span>}
+          </div>
+
+          {/* Действия */}
           <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
             {['plus','family'].map(plan=>(
-              <button key={plan} onClick={()=>grantSubscription(u.id,plan)} style={{ padding:'5px 10px', borderRadius:6, fontSize:11, cursor:'pointer', border:'1px solid var(--border)', background:'transparent', color:'var(--text2)' }}>+ {plan}</button>
+              <button key={plan} onClick={()=>grantSubscription(u.id,plan)}
+                style={{ padding:'6px 12px', borderRadius:8, fontSize:11, cursor:'pointer', border:'1px solid var(--border)', background:'transparent', color:'var(--text2)' }}>
+                + {plan}
+              </button>
             ))}
-            <button onClick={()=>revokeSubscription(u.id)} style={{ padding:'5px 10px', borderRadius:6, fontSize:11, cursor:'pointer', border:'1px solid var(--border)', background:'transparent', color:'var(--text3)' }}>Отозвать</button>
+            <button onClick={()=>revokeSubscription(u.id)}
+              style={{ padding:'6px 12px', borderRadius:8, fontSize:11, cursor:'pointer', border:'1px solid var(--border)', background:'transparent', color:'var(--text3)' }}>
+              Отозвать
+            </button>
+            <button onClick={()=>resetUserPassword(u.email)}
+              style={{ padding:'6px 12px', borderRadius:8, fontSize:11, cursor:'pointer', border:'1px solid rgba(250,204,21,0.4)', background:'rgba(250,204,21,0.08)', color:'#facc15' }}>
+              🔑 Сбросить пароль
+            </button>
+            <button onClick={()=>banUser(u.id)}
+              style={{ padding:'6px 12px', borderRadius:8, fontSize:11, cursor:'pointer', border:'1px solid rgba(248,113,113,0.3)', background:'rgba(248,113,113,0.08)', color:'#f87171' }}>
+              🚫 Бан
+            </button>
           </div>
         </div>
       ))}
-      {searchResult?.length===0 && <p style={{ color:'var(--text3)', fontSize:13 }}>Не найдено</p>}
+      {searchResult?.length === 0 && <p style={{ color:'var(--text3)', fontSize:13 }}>Ничего не найдено</p>}
     </TabWrapper>
   )
 

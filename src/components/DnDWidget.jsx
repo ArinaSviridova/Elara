@@ -409,8 +409,27 @@ export function DnDActivityButton({ onResponse }) {
   const rl = useRl()
   const [showRoll, setShowRoll] = useState(false)
   const [showOracle, setShowOracle] = useState(false)
-  const dndMode = localStorage.getItem('elara_dnd_mode')
-  const oracleMode = localStorage.getItem('elara_oracle_mode')
+  // Реактивное чтение из localStorage — обновляется при изменении настройки
+  const [dndMode, setDndMode] = useState(() => localStorage.getItem('elara_dnd_mode'))
+  const [oracleMode, setOracleMode] = useState(() => localStorage.getItem('elara_oracle_mode'))
+
+  // Слушаем изменения из AppearancePage
+  useEffect(() => {
+    function onStorage(e) {
+      if (e.key === 'elara_dnd_mode') setDndMode(e.newValue)
+      if (e.key === 'elara_oracle_mode') setOracleMode(e.newValue)
+    }
+    function onLockChange() {
+      setDndMode(localStorage.getItem('elara_dnd_mode'))
+      setOracleMode(localStorage.getItem('elara_oracle_mode'))
+    }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('elara-lock-change', onLockChange)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('elara-lock-change', onLockChange)
+    }
+  }, [])
 
   if (!dndMode && !oracleMode) return null
 
