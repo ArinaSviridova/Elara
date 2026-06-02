@@ -7,15 +7,15 @@ import { useLang } from '../context/LangContext'
 const PERSONALITY = [
   { key:'introvert', ru:'🌙 Интроверт', en:'🌙 Introvert' },
   { key:'extrovert', ru:'☀️ Экстраверт', en:'☀️ Extrovert' },
-  { key:'sensitive', ru:'🌸 Чувствительная', en:'🌸 Sensitive' },
+  { key:'sensitive', ru:'🌸 Чувствительный', en:'🌸 Sensitive' },
   { key:'rational', ru:'🧠 Рациональная', en:'🧠 Rational' },
-  { key:'creative', ru:'🎨 Творческая', en:'🎨 Creative' },
+  { key:'creative', ru:'🎨 Творческий', en:'🎨 Creative' },
   { key:'spontaneous', ru:'⚡ Спонтанная', en:'⚡ Spontaneous' },
-  { key:'analytical', ru:'🔬 Аналитическая', en:'🔬 Analytical' },
+  { key:'analytical', ru:'🔬 Аналитический', en:'🔬 Analytical' },
   { key:'empath', ru:'💜 Эмпат', en:'💜 Empath' },
   { key:'perfectionist', ru:'💎 Перфекционистка', en:'💎 Perfectionist' },
   { key:'homebody', ru:'🏠 Домашняя', en:'🏠 Homebody' },
-  { key:'social', ru:'👥 Социальная', en:'👥 Social' },
+  { key:'social', ru:'👥 Социальный', en:'👥 Social' },
 ]
 
 const CARE_PREFS = [

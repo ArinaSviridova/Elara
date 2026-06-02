@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useStyle } from '../context/StyleContext'
 import { useLang, useRl } from '../context/LangContext'
 import { predictCycle, getPhaseForDate, getDetailedPhaseForDate, detectStmWindow } from '../lib/cyclePredictor'
 import AIAdvice from '../components/AIAdvice'
@@ -162,6 +163,7 @@ function CycleCalendar({ calendarConfig }) {
   const [rangeEnd, setRangeEnd] = useState(toKey(new Date()))
 
   const rl = useRl()
+  const { term } = useStyle()
 
   const [intimacyDays, setIntimacyDays] = useState({})
   const [healthSettings, setHealthSettings] = useState(profile?.health || {})

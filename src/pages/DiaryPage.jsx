@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { supabase } from '../lib/supabase'
 import { OracleCardWidget } from '../components/DnDWidget'
 import { useAuth } from '../context/AuthContext'
+import { useStyle } from '../context/StyleContext'
 import { useLang, useRl } from '../context/LangContext'
 import { hashPin } from '../components/AppLock'
 
@@ -87,7 +88,7 @@ const TAG_TREE = {
   },
   '🌸 тело': {
     color: '#f9a8d4',
-    children: ['довольна собой 💃', 'не нравлюсь себе 😕', 'спорт 🏃', 'питание 🥗', 'уход за собой 🛁']
+    children: ['доволен(а) собой 💃', 'не нравлюсь себе 😕', 'спорт 🏃', 'питание 🥗', 'уход за собой 🛁']
   },
   '💼 работа/учёба': {
     color: '#94a3b8',
@@ -136,6 +137,7 @@ export default function DiaryPage() {
   const [sendingPush, setSendingPush] = useState(false)
 
   const rl = useRl()
+  const { term } = useStyle()
 
   useEffect(() => {
     if (!user?.id) return

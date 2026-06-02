@@ -82,7 +82,7 @@ export default function TeenSetupPage({ onDone }) {
           {rl('Привет! Это приложение для тебя', 'Hi! This app is for you')}
         </h2>
         <p style={{ fontSize:14, color:'var(--text2)', textAlign:'center', lineHeight:1.7 }}>
-          {rl('Скажи в каком году ты родилась — мы адаптируем приложение под твой возраст', 'Tell us your birth year — we\'ll adapt the app for your age')}
+          {rl('Скажи в каком году ты родился(ась) — мы адаптируем приложение под твой возраст', 'Tell us your birth year — we\'ll adapt the app for your age')}
         </p>
       </div>
       <div>

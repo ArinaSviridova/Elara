@@ -24,9 +24,28 @@ export default function SubscriptionPage() {
     en: ['Everything in Plus', 'Teen mode + parental control', 'Up to 10 people', 'AI personalization', 'Intimacy tracker', 'Hidden partner for teens', 'Priority support'],
   }
 
+  // Определяем валюту по локали устройства
+  const locale = navigator.language || navigator.languages?.[0] || 'ru-RU'
+  const region = locale.split('-')[1] || locale.split('_')[1] || ''
+  
+  // Базовые цены в USD: Plus год $19.9, Plus мес $3.99, Family год $34.9, Family мес $5.99
+  const RATES = { RU: 90, UA: 41, BY: 3.2, KZ: 450, GE: 2.7, AM: 390, AZ: 1.7, MD: 18, UZ: 12500, KG: 89 }
+  const SYMBOLS = { RU: '₽', UA: '₴', BY: 'Br', KZ: '₸', GE: '₾', AM: '֏', AZ: '₼', MD: 'L', UZ: "so'm", KG: 'с' }
+  
+  function getLocalPrice(usdAmount, period) {
+    const rate = RATES[region]
+    if (!rate) return period === 'yr' ? `$${usdAmount}/yr` : `$${usdAmount}/mo`
+    const raw = usdAmount * rate
+    // Округляем до ближайших 50
+    const rounded = Math.ceil(raw / 50) * 50
+    const sym = SYMBOLS[region]
+    const periodLabel = period === 'yr' ? (lang === 'en' ? '/yr' : '/год') : (lang === 'en' ? '/mo' : '/мес')
+    return `${rounded.toLocaleString()} ${sym}${periodLabel}`
+  }
+
   const prices = billingPeriod === 'year'
-    ? { plus: rl('1 990 ₽/год', '$24.99/yr'), family: rl('3 490 ₽/год', '$49.99/yr') }
-    : { plus: rl('299 ₽/мес', '$3.99/mo'),   family: rl('499 ₽/мес', '$6.99/mo') }
+    ? { plus: getLocalPrice(19.9, 'yr'), family: getLocalPrice(34.9, 'yr') }
+    : { plus: getLocalPrice(3.99, 'mo'), family: getLocalPrice(5.99, 'mo') }
 
   async function handlePromo(e) {
     e.preventDefault()

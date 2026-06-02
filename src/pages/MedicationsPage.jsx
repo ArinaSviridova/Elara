@@ -47,6 +47,7 @@ function loadJson(key, fallback = {}) {
 export default function MedicationsPage() {
   const { user, profile } = useAuth()
   const rl = useRl()
+  const { term } = useStyle()
 
   const [activeMeds, setActiveMeds] = useState([])
   const [inactiveMeds, setInactiveMeds] = useState([])

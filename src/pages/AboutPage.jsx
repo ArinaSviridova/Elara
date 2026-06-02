@@ -55,7 +55,7 @@ export default function AboutPage() {
         {[
           rl('Дневник самочувствия - энергия, настроение, боль, сон, либидо', 'Wellbeing journal - energy, mood, pain, sleep, libido'),
           rl('Календарь цикла и трекинг симптомов', 'Cycle calendar and symptom tracking'),
-          rl('Напоминания о препаратах, которые ты добавила сама', 'Reminders for medications you added yourself'),
+          rl('Напоминания о препаратах, которые ты добавил(а) сам(а)', 'Reminders for medications you added yourself'),
           rl('Общие окошки с близкими - когда всем норм', "Shared windows with loved ones - when everyone's okay"),
           rl('AI-сводки по личным данным для обсуждения с врачом', 'AI summaries of personal data for discussion with doctor'),
           rl('Загрузка и распознавание анализов (для себя, не диагноз)', 'Upload and recognize tests (for yourself, not diagnosis)'),
@@ -94,7 +94,7 @@ export default function AboutPage() {
         {[
           [rl('Row Level Security', 'Row Level Security'), rl('Данные каждого пользователя изолированы на уровне БД', "Each user's data is isolated at database level")],
           [rl('API ключи только на сервере', 'API keys server-side only'), rl('Никаких секретов на фронтенде', 'No secrets on frontend')],
-          [rl('Гранулярный шаринг', 'Granular sharing'), rl('Друзья видят только то, что ты разрешила', 'Friends see only what you allow')],
+          [rl('Гранулярный шаринг', 'Granular sharing'), rl('Друзья видят только то, что ты разрешил(а)', 'Friends see only what you allow')],
           [rl('PIN-блокировка', 'PIN lock'), rl('Двойной PIN: реальный и отвлекающий', 'Dual PIN: real and decoy')],
           [rl('Скрытые уведомления', 'Hidden notifications'), rl('Названия препаратов не видны на экране блокировки', 'Medication names hidden on lock screen')],
           [rl('Экспорт и удаление данных', 'Export & delete data'), rl('Полный контроль над своими данными', 'Full control over your data')],

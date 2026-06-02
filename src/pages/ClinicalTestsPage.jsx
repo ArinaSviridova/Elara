@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { getAddressMode } from '../lib/genderAddress'
 import { useLang, useRl } from '../context/LangContext'
 
 // Клинические тесты — все вопросы и валидированные шкалы
@@ -13,6 +14,7 @@ const TESTS = {
     refName: 'PubMed 11556941',
     for: 'all',
     scale: ['Никогда', 'Несколько дней', 'Более половины дней', 'Почти каждый день'],
+    scale_en: ['Not at all', 'Several days', 'More than half the days', 'Nearly every day'],
     questions: [
       'Сниженный интерес или удовольствие от обычных занятий',
       'Подавленное, депрессивное или безнадёжное настроение',
@@ -40,6 +42,7 @@ const TESTS = {
     refName: 'PubMed 16717171',
     for: 'all',
     scale: ['Никогда', 'Несколько дней', 'Более половины дней', 'Почти каждый день'],
+    scale_en: ['Not at all', 'Several days', 'More than half the days', 'Nearly every day'],
     questions: [
       'Чувство нервозности, тревоги или напряжения',
       'Неспособность прекратить или контролировать беспокойство',
@@ -165,12 +168,12 @@ const TESTS = {
     for: 'cycle',
     scale: ['Практически никогда', 'Редко', 'Иногда', 'Часто', 'Почти всегда'],
     questions: [
-      'Как часто ты испытывала сексуальное желание за последние 4 недели?',
+      'Как часто ты испытывал(а) сексуальное желание за последние 4 недели?',
       'Как оцениваешь уровень своего сексуального желания?',
-      'Как часто ты испытывала возбуждение во время сексуальной активности?',
+      'Как часто ты испытывал(а) возбуждение во время сексуальной активности?',
       'Как оцениваешь уровень своего возбуждения?',
       'Как уверена была в своём возбуждении?',
-      'Как часто ты испытывала достаточную естественную смазку?',
+      'Как часто ты испытывал(а) достаточную естественную смазку?',
       'Было ли трудно достичь оргазма?',
       'Была ли удовлетворена качеством оргазма?',
       'Испытывала ли боль или дискомфорт во время секса?',
@@ -209,14 +212,14 @@ const TESTS = {
     ref: 'https://pmc.ncbi.nlm.nih.gov/articles/PMC6300285/',
     refName: 'PMC6300285',
     for: 'all',
-    scale: ['Совсем не согласна', 'Скорее нет', 'Нейтрально', 'Скорее да', 'Полностью согласна'],
+    scale: ['Совсем нет', 'Скорее нет', 'Нейтрально', 'Скорее да', 'Полностью да'],
     questions: [
       // Открытость
       'Мне нравится пробовать новые, нестандартные вещи',
       'Я часто думаю о глубоких вопросах и идеях',
       // Добросовестность
       'Я выполняю свои планы и доделываю начатое',
-      'Я организованна и пунктуальна',
+      'Я организован(на) и пунктуален(на)',
       // Экстраверсия
       'Я чувствую себя в центре внимания',
       'Общение с людьми заряжает меня энергией',
@@ -238,10 +241,10 @@ const TESTS = {
       if (extraversion > 0.6) tags.push('☀️ Экстраверт')
       else if (extraversion < 0.4) tags.push('🌙 Интроверт')
       else tags.push('⚖️ Амбиверт')
-      if (conscientiousness > 0.6) tags.push('💎 Перфекционистка')
-      if (openness > 0.6) tags.push('🎨 Творческая')
-      if (neuroticism > 0.6) tags.push('🌸 Чувствительная')
-      else if (neuroticism < 0.3) tags.push('🧠 Рациональная')
+      if (conscientiousness > 0.6) tags.push('💎 Перфекционист')
+      if (openness > 0.6) tags.push('🎨 Творческий')
+      if (neuroticism > 0.6) tags.push('🌸 Чувствительный')
+      else if (neuroticism < 0.3) tags.push('🧠 Рациональный')
       if (agreeableness > 0.65) tags.push('💜 Эмпат')
       return { tags, openness, conscientiousness, extraversion, agreeableness, neuroticism }
     },
@@ -548,7 +551,48 @@ function buildResultGuidance(testKey, result, rl) {
     },
   }
 
+  const big5Guidance = {
+    focus: [
+      rl('это описательный профиль, не диагноз — черты личности стабильны, но поведение меняется','this is a descriptive profile, not a diagnosis — traits are stable, but behavior can change'),
+      rl('сочетание высокого нейротизма и низкой добросовестности часто даёт ощущение хаоса','high neuroticism + low conscientiousness often creates a sense of chaos'),
+      rl('высокая открытость при низкой экстраверсии — типичный интроверт-мыслитель, это не проблема','high openness with low extraversion is typical of introverted thinkers — not a problem'),
+    ],
+    next: rl('Результаты Big Five показывают тенденции, не ограничения.', 'Big Five results show tendencies, not limitations.'),
+  }
+  if (testKey === 'big5') return big5Guidance
   return guidance[testKey] || guidance.default
+}
+
+function displayQuestion(q, profile, lang) {
+  if (!q || !profile) return q
+  // Если вопрос содержит | разделитель — это ru|en формат
+  if (q.includes('|') && lang === 'en') {
+    const parts = q.split('|')
+    if (parts.length === 2) return parts[1].trim()
+  }
+  const mode = getAddressMode(profile)
+  const she = mode === 'she'
+  const they = mode === 'they'
+  return q
+    .replace('чувствовал(а)', they ? 'чувствовали' : she ? 'чувствовала' : 'чувствовал')
+    .replace('испытывал(а)', they ? 'испытывали' : she ? 'испытывала' : 'испытывал')
+    .replace('умел(а)', they ? 'умели' : she ? 'умела' : 'умел')
+    .replace('справлялся(ась)', they ? 'справлялись' : she ? 'справлялась' : 'справлялся')
+    .replace('чувствовал(а),', they ? 'чувствовали,' : she ? 'чувствовала,' : 'чувствовал,')
+    .replace('организован(на)', they ? 'организованы' : she ? 'организованна' : 'организован')
+    .replace('пунктуален(на)', they ? 'пунктуальны' : she ? 'пунктуальна' : 'пунктуален')
+    .replace('просыпался(ась)', they ? 'просыпались' : she ? 'просыпалась' : 'просыпался')
+    .replace('радостным(ой)', they ? 'радостными' : she ? 'радостной' : 'радостным')
+    .replace('спокойным(ой)', they ? 'спокойными' : she ? 'спокойной' : 'спокойным')
+    .replace('расслабленным(ой)', they ? 'расслабленными' : she ? 'расслабленной' : 'расслабленным')
+    .replace('активным(ой)', they ? 'активными' : she ? 'активной' : 'активным')
+    .replace('энергичным(ой)', they ? 'энергичными' : she ? 'энергичной' : 'энергичным')
+    .replace('бодрым(ой)', they ? 'бодрыми' : she ? 'бодрой' : 'бодрым')
+    .replace('отдохнувшим(ей)', they ? 'отдохнувшими' : she ? 'отдохнувшей' : 'отдохнувшим')
+    .replace('доволен(а)', they ? 'довольны' : she ? 'довольна' : 'доволен')
+    .replace('родился(ась)', they ? 'родились' : she ? 'родилась' : 'родился')
+    .replace('Совсем нет', they ? 'Совсем нет' : she ? 'Совсем нет' : 'Совсем нет')
+    .replace('Полностью да', they ? 'Полностью да' : she ? 'Полностью да' : 'Полностью да')
 }
 
 export default function ClinicalTestsPage() {
@@ -712,7 +756,7 @@ export default function ClinicalTestsPage() {
   // Экран прохождения теста
   if (activeTest && result === null) {
     const test = TESTS[activeTest]
-    const q = test.questions[step]
+    const q = displayQuestion(test.scale_en && lang === 'en' ? (test.questions_en?.[step] || test.questions[step]) : test.questions[step], profile, lang)
     const progress = (step / test.questions.length) * 100
     return (
       <div className="page-enter" style={{ flex:1, display:'flex', flexDirection:'column', padding:'24px 20px', gap:16 }}>
@@ -744,7 +788,7 @@ export default function ClinicalTestsPage() {
             {q}
           </p>
           <div style={{ display:'flex', flexDirection:'column', gap:10 }}>
-            {test.scale.map((label, i) => (
+            {(lang === 'en' && test.scale_en ? test.scale_en : test.scale).map((label, i) => (
               <button key={i} onClick={() => answerQuestion(i)} style={{
                 padding:'14px 16px', borderRadius:10, fontSize:14, cursor:'pointer', textAlign:'left',
                 border:`1px solid ${answers[step] === i ? 'var(--accent)' : 'var(--border)'}`,

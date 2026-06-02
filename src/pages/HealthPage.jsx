@@ -155,27 +155,37 @@ export default function HealthPage() {
     }
   }
 
-  async function addAiConditionDescription(condition) {
-    const note = buildAiConditionNote(condition)
-    const nextHealth = {
-      ...(profile?.health || {}),
-      condition_notes: {
-        ...(profile?.health?.condition_notes || {}),
-        [condition]: note,
-      },
-      condition_sources: {
-        ...(profile?.health?.condition_sources || {}),
-        [condition]: rl('AI-черновик Elara, проверь с врачом', 'Elara AI draft, verify with clinician'),
-      },
-    }
+  async function addAiConditionDescription(conditionName) {
+    // Запрашиваем AI описание
+    try {
+      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-advisor`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json',
+          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
+        body: JSON.stringify({
+          requestType: 'validate_condition',
+          userId: user.id,
+          condition: conditionName,
+          language: lang,
+        })
+      })
+      const data = await res.json()
+      const aiText = data.content?.[0]?.text || ''
+      if (aiText && aiText.length > 20) {
+        setSelectedConditionInfo(prev => ({ ...prev, aiDescription: aiText }))
+        // Сохраняем в condition_notes
+        const nextHealth = { ...(profile?.health || {}),
+          condition_notes: { ...(profile?.health?.condition_notes || {}), [conditionName]: aiText } }
+        await updateProfile({ health: nextHealth })
+        return
+      }
+    } catch {}
+    // fallback — старая логика
+    const note = buildAiConditionNote(conditionName)
+    const nextHealth = { ...(profile?.health || {}),
+      condition_notes: { ...(profile?.health?.condition_notes || {}), [conditionName]: note } }
+    setSelectedConditionInfo(prev => ({ ...prev, aiDescription: note }))
     await updateProfile({ health: nextHealth })
-    setSelectedConditionInfo({
-      title: condition,
-      description: note.description,
-      source: nextHealth.condition_sources[condition],
-      assignments: [],
-      questions: note.questions,
-    })
   }
 
   function conditionInfo(condition) {
@@ -605,16 +615,28 @@ export default function HealthPage() {
         )}
 
         {selectedConditionInfo && (
-          <div className="card" style={{ padding:16, border:'1px solid rgba(167,139,250,0.35)', background:'var(--bg2)' }}>
+          <div className="card" style={{ padding:16, border:'1px solid rgba(167,139,250,0.35)', background:'var(--bg2)', position:'sticky', top:8, zIndex:10, position:'sticky', top:8, zIndex:10 }}>
             <div style={{ display:'flex', justifyContent:'space-between', gap:10 }}>
               <div style={{ fontSize:16, fontWeight:800 }}>{selectedConditionInfo.title}</div>
               <button type="button" onClick={() => setSelectedConditionInfo(null)} className="btn btn-ghost" style={{ width:'auto', padding:'4px 8px' }}>×</button>
             </div>
             <p style={{ fontSize:13, color:'var(--text2)', lineHeight:1.6 }}>{typeof selectedConditionInfo.description === 'string' ? selectedConditionInfo.description : selectedConditionInfo.description?.description}</p>
             <div style={{ fontSize:12, color:'var(--text3)', lineHeight:1.5 }}>Источник: {selectedConditionInfo.source}</div>
-            <button type="button" onClick={() => addAiConditionDescription(selectedConditionInfo.title)} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12, marginTop:10 }}>
-              ✨ {rl('Найти описание AI','Find AI description')}
-            </button>
+            {selectedConditionInfo.aiDescription ? (
+              <div style={{ marginTop:10, padding:'10px 12px', borderRadius:10,
+                background:'rgba(74,222,128,0.07)', border:'1px solid rgba(74,222,128,0.2)' }}>
+                <div style={{ fontSize:11, color:'#4ade80', fontWeight:600, marginBottom:6 }}>
+                  ✨ AI-описание
+                </div>
+                <p style={{ fontSize:12, color:'var(--text2)', lineHeight:1.65, margin:0 }}>
+                  {selectedConditionInfo.aiDescription}
+                </p>
+              </div>
+            ) : (
+              <button type="button" onClick={() => addAiConditionDescription(selectedConditionInfo.title)} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12, marginTop:10 }}>
+                ✨ {rl('Найти описание AI','Find AI description')}
+              </button>
+            )}
             {selectedConditionInfo.assignments.length > 0 && <div style={{ marginTop:10, fontSize:12 }}><strong>{rl('Связанные назначения','Linked assignments')}:</strong> {selectedConditionInfo.assignments.map(a => a.title || a.name).join(', ')}</div>}
             <div style={{ marginTop:10 }}>
               <div style={{ fontSize:12, fontWeight:700, marginBottom:5 }}>{rl('Что уточнить у врача','Questions for doctor')}</div>

@@ -1,7 +1,10 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import NotificationsPanel from '../components/NotificationsPanel'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { useStyle } from '../context/StyleContext'
+import { earnAchievement, hasAchievement } from '../lib/achievements'
+import { showAchievementToast } from '../components/AchievementToast'
 import { useLang } from '../context/LangContext'
 import AIAdvice from '../components/AIAdvice'
 import { DnDActivityButton } from '../components/DnDWidget'
@@ -116,12 +119,47 @@ export default function TodayPage() {
   const navigate = useNavigate()
   const { user, profile } = useAuth()
   const { lang } = useLang()
+  const { updateProfile } = useAuth()
+  const { supabase: _sb } = {} // используем supabase из AuthContext если нужно
+
+  // Ачивки — ретро-проверка при первом открытии
+  useEffect(() => {
+    if (!user || !profile) return
+    async function checkAchievements() {
+      const { supabase } = await import('../lib/supabase')
+      const { retroCheckAchievements } = await import('../lib/achievements')
+
+      // Ночная сова — только в реальном времени
+      const hour = new Date().getHours()
+      if (hour >= 0 && hour < 5 && !hasAchievement(profile, 'night_owl')) {
+        const ok = await earnAchievement(supabase, profile, 'night_owl', updateProfile)
+        if (ok) showAchievementToast('night_owl')
+      }
+
+      // Ретроактивная проверка — если ачивок мало, проверяем историю
+      const currentCount = (profile?.achievements || []).length
+      if (currentCount < 3) {
+        try {
+          const newlyEarned = await retroCheckAchievements(supabase, profile, updateProfile)
+          // Показываем тосты с небольшой задержкой чтобы не спамить
+          newlyEarned.forEach((key, i) => {
+            setTimeout(() => showAchievementToast(key), i * 800)
+          })
+        } catch (e) {
+          console.warn('retroCheck failed:', e)
+        }
+      }
+    }
+    checkAchievements()
+  }, [user?.id])
+
   const [showQuick, setShowQuick] = useState(false)
   const [detailMode, setDetailMode] = useState(
     localStorage.getItem('elara_explain_mode') || 'short'
   )
 
   const rl = (ru, en) => (lang === 'en' ? en : ru)
+  const { term } = useStyle()
 
   const health = profile?.health || {}
   const assignments = health.assignments || []
@@ -396,6 +434,30 @@ export default function TodayPage() {
 
       {/* D20 / Оракул — если включено в профиле */}
       <DnDActivityButton />
+
+      {/* Быстрый доступ к модулям */}
+      <div className="card" style={{ padding:'12px 14px' }}>
+        <div style={{ fontSize:12, color:'var(--text3)', fontWeight:500, marginBottom:10 }}>
+          📚 {rl('Узнать больше о своём здоровье', 'Learn more about your health')}
+        </div>
+        <div style={{ display:'flex', gap:6, flexWrap:'wrap' }}>
+          {[
+            { key:'cycle', emoji:'🩸', ru:'Цикл', en:'Cycle' },
+            { key:'mood', emoji:'🌙', ru:'Настроение', en:'Mood' },
+            { key:'sleep', emoji:'😴', ru:'Сон', en:'Sleep' },
+            { key:'stress', emoji:'☁️', ru:'Стресс', en:'Stress' },
+            { key:'meds', emoji:'💊', ru:'Лекарства', en:'Meds' },
+            { key:'sport', emoji:'🏃', ru:'Спорт', en:'Sport' },
+          ].map(mod => (
+            <button key={mod.key} type="button"
+              onClick={() => navigate(`/module/${mod.key}`)}
+              style={{ padding:'7px 12px', borderRadius:20, border:'1px solid var(--border)',
+                background:'var(--bg3)', color:'var(--text2)', fontSize:12, cursor:'pointer' }}>
+              {mod.emoji} {lang === 'en' ? mod.en : mod.ru}
+            </button>
+          ))}
+        </div>
+      </div>
 
       {/* Тесты — всегда видны */}
       <div style={{ padding:'12px 14px', background:'var(--bg2)', borderRadius:14, border:'1px solid var(--border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>

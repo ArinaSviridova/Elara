@@ -1,47 +1,62 @@
-// ─── Обращение по роду ──────────────────────────────────────
-// Используется везде где нужно учесть address_style / pronouns пользователя
+// ─── Динамическое обращение по роду ───────────────────────────────────────
+// profile.pronouns: 'she' | 'he' | 'they' | '' (auto по gender)
+// profile.address_style: 'auto' | 'neutral' | 'minimal' | 'classic'
+// profile.gender: 'cis_woman' | 'cis_man' | 'non_binary' | etc
 
 /**
- * Возвращает правильную форму слова по обращению профиля
- * fem - женская форма (почувствовала)
- * masc - мужская форма (почувствовал)  
- * neutral - нейтральная (почувствовал(а))
- * 
- * @param {object} profile - профиль пользователя
- * @param {string} fem - женская форма
- * @param {string} masc - мужская форма
- * @param {string} [neutral] - нейтральная форма (опционально)
+ * Определяет режим обращения по профилю
+ * @returns 'she' | 'he' | 'they' | 'neutral'
  */
-export function gForm(profile, fem, masc, neutral = null) {
-  const style = profile?.address_style || 'auto'
-  const gender = profile?.gender || ''
-  
-  // Определяем обращение
-  const isMale = style === 'male' || 
-    (!style || style === 'auto') && ['cis_man', 'trans_man', 'male', 'man'].includes(gender)
-  const isFemale = style === 'female' || 
-    (!style || style === 'auto') && ['cis_woman', 'trans_woman', 'female', 'woman'].includes(gender)
-  const isNeutral = style === 'neutral' || style === 'they' ||
-    ['non_binary', 'nonbinary', 'agender', 'genderfluid'].includes(gender)
+export function getAddressMode(profile) {
+  const p = profile?.pronouns || ''
+  if (p === 'she' || p === 'она' || p === 'she/her') return 'she'
+  if (p === 'he'  || p === 'он'  || p === 'he/him')  return 'he'
+  if (p === 'they'|| p === 'они' || p === 'they/them') return 'they'
 
-  if (isMale) return masc
-  if (isFemale) return fem
-  if (isNeutral) return neutral || `${masc}(а)`
-  // По умолчанию нейтральная или женская (большинство пользователей)
-  return neutral || fem
+  // Авто — определяем по гендеру
+  const g = profile?.gender || ''
+  if (['cis_woman', 'trans_woman', 'female', 'woman'].includes(g)) return 'she'
+  if (['cis_man', 'trans_man', 'male', 'man'].includes(g)) return 'he'
+  if (['non_binary', 'nonbinary', 'agender', 'genderfluid',
+       'genderqueer', 'two_spirit', 'neutrois', 'maverique'].includes(g)) return 'they'
+
+  return 'neutral' // неизвестно — нейтральная скобочная форма
 }
 
 /**
- * Обращение "ты" / "вы" по настройкам
+ * Возвращает нужную форму слова по обращению
+ * @param {object} profile
+ * @param {string} she   - женская форма (почувствовала)
+ * @param {string} he    - мужская форма (почувствовал)
+ * @param {string} they  - форма "они" (почувствовали) — если не задана, используется neutral
+ * @param {string} neutral - нейтральная скобочная форма (почувствовал(а)) — если не задана, строится авто
  */
-export function getAddressForm(profile) {
-  return profile?.address_style === 'formal' ? 'вы' : 'ты'
+export function gForm(profile, she, he, they = null, neutral = null) {
+  const mode = getAddressMode(profile)
+  const autoNeutral = neutral || (she === he ? she : `${he}(а)`)
+
+  if (mode === 'she')     return she
+  if (mode === 'he')      return he
+  if (mode === 'they')    return they || `${he}(и)` || autoNeutral
+  return autoNeutral  // neutral или неизвестно
 }
 
 /**
- * Приветствие с правильным родом
- * Возвращает "ты справилась" / "ты справился" / "ты справился(ась)"
+ * Склоняет глагол-связку для "они"
+ * ты чувствовал → вы/они чувствовали
+ * (простое правило: добавляем -и к основе прошедшего времени)
  */
-export function gVerb(profile, fem, masc) {
-  return gForm(profile, fem, masc)
+export function gVerb(profile, she, he, they = null) {
+  return gForm(profile, she, he, they)
+}
+
+/**
+ * Краткая форма: возвращает "он"/"она"/"они"/"этот человек"
+ */
+export function gPronoun(profile) {
+  const mode = getAddressMode(profile)
+  if (mode === 'she') return 'она'
+  if (mode === 'he')  return 'он'
+  if (mode === 'they') return 'они'
+  return 'этот человек'
 }

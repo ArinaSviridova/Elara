@@ -33,29 +33,41 @@ export const GENDER_IDENTITIES_SHORT = [
   { key: 'trans_man', ru: 'Трансмужчина', en: 'Trans man', ui: 'trans man' },
   { key: 'non_binary', ru: 'Небинарный/Небинарная', en: 'Non-binary', ui: 'non-binary' },
   { key: 'genderfluid', ru: 'Гендерфлюид', en: 'Genderfluid', ui: 'genderfluid' },
-  { key: 'agender', ru: 'Агендерный/Агендерная', en: 'Agender', ui: 'agender' },
+  { key: 'agender', ru: 'Агендерный/Агендерная', en: 'Agender', ui: 'agender', descRu: 'Человек, не идентифицирующий себя ни с каким гендером или не испытывающий гендерной идентичности.', descEn: 'A person who does not identify with any gender or lacks a gender identity.' },
   { key: 'questioning', ru: 'В поиске', en: 'Questioning', ui: 'questioning' },
   { key: 'prefer_not', ru: 'Не хочу указывать', en: 'Prefer not to say', ui: 'hidden' },
   { key: 'custom', ru: 'Другой вариант', en: 'Other', ui: 'custom' },
 ]
 
 export const GENDER_IDENTITIES_EXTENDED = [
-  { key: 'cis_woman', ru: 'Женщина (цисгендерная)', en: 'Cisgender woman', ui: 'woman' },
-  { key: 'cis_man', ru: 'Мужчина (цисгендерный)', en: 'Cisgender man', ui: 'man' },
-  { key: 'trans_woman', ru: 'Трансженщина', en: 'Trans woman', ui: 'trans woman' },
-  { key: 'trans_man', ru: 'Трансмужчина', en: 'Trans man', ui: 'trans man' },
-  { key: 'non_binary', ru: 'Небинарный/Небинарная', en: 'Non-binary', ui: 'non-binary' },
-  { key: 'genderfluid', ru: 'Гендерфлюид', en: 'Genderfluid', ui: 'genderfluid' },
-  { key: 'agender', ru: 'Агендерный/Агендерная', en: 'Agender', ui: 'agender' },
+  { key: 'cis_woman', ru: 'Женщина (цисгендерная)', en: 'Cisgender woman', ui: 'woman',
+    descRu: 'Человек, рождённый с женскими биологическими характеристиками и идентифицирующий себя как женщина. «Цисгендерная» означает совпадение гендерной идентичности с полом при рождении.',
+    descEn: 'A person born with female biological characteristics who identifies as a woman. "Cisgender" means gender identity matches sex assigned at birth.' },
+  { key: 'cis_man', ru: 'Мужчина (цисгендерный)', en: 'Cisgender man', ui: 'man',
+    descRu: 'Человек, рождённый с мужскими биологическими характеристиками и идентифицирующий себя как мужчина.',
+    descEn: 'A person born with male biological characteristics who identifies as a man.' },
+  { key: 'trans_woman', ru: 'Трансженщина', en: 'Trans woman', ui: 'trans woman',
+    descRu: 'Женщина, которой при рождении был присвоен мужской пол. Транс-идентичность — это часть нормального человеческого разнообразия, признанная ВОЗ.',
+    descEn: 'A woman who was assigned male at birth. Trans identity is part of normal human diversity, recognized by the WHO.' },
+  { key: 'trans_man', ru: 'Трансмужчина', en: 'Trans man', ui: 'trans man',
+    descRu: 'Мужчина, которому при рождении был присвоен женский пол. Может иметь или не иметь менструальный цикл — Elara адаптируется под твои настройки.',
+    descEn: 'A man who was assigned female at birth. May or may not have a menstrual cycle — Elara adapts to your settings.' },
+  { key: 'non_binary', ru: 'Небинарный/Небинарная', en: 'Non-binary', ui: 'non-binary',
+    descRu: 'Человек, чья гендерная идентичность не вписывается в рамки «мужчина/женщина». Небинарность — широкий спектр идентичностей.',
+    descEn: 'A person whose gender identity does not fit within the male/female binary. Non-binary is a broad spectrum of identities.' },
+  { key: 'genderfluid', ru: 'Гендерфлюид', en: 'Genderfluid', ui: 'genderfluid',
+    descRu: 'Человек, чья гендерная идентичность изменяется со временем или в зависимости от ситуации — между женским, мужским или другими идентичностями.',
+    descEn: 'A person whose gender identity shifts over time or context — between feminine, masculine, or other identities.' },
+  { key: 'agender', ru: 'Агендерный/Агендерная', en: 'Agender', ui: 'agender', descRu: 'Человек, не идентифицирующий себя ни с каким гендером или не испытывающий гендерной идентичности.', descEn: 'A person who does not identify with any gender or lacks a gender identity.' },
   { key: 'bigender', ru: 'Бигендерный', en: 'Bigender', ui: 'bigender' },
   { key: 'pangender', ru: 'Пангендерный', en: 'Pangender', ui: 'pangender' },
   { key: 'two_spirit', ru: 'Двухдухный (Two-Spirit)', en: 'Two-Spirit', ui: 'two-spirit' },
   { key: 'enby', ru: 'Энби (Enby)', en: 'Enby', ui: 'enby' },
   { key: 'demigirl', ru: 'Демидевушка', en: 'Demigirl', ui: 'demigirl' },
   { key: 'demiboy', ru: 'Демипарень', en: 'Demiboy', ui: 'demiboy' },
-  { key: 'neutrois', ru: 'Нейтруа', en: 'Neutrois', ui: 'neutrois' },
+  { key: 'neutrois', ru: 'Нейтруа', en: 'Neutrois', ui: 'neutrois', descRu: 'Нейтральная или нулевая гендерная идентичность, часто связанная с желанием нейтрального тела.', descEn: 'A neutral or null gender identity, often associated with a desire for a neutral body.' },
   { key: 'androgyne', ru: 'Андрогин', en: 'Androgyne', ui: 'androgyne' },
-  { key: 'maverique', ru: 'Маверик', en: 'Maverique', ui: 'maverique' },
+  { key: 'maverique', ru: 'Маверик', en: 'Maverique', ui: 'maverique', descRu: 'Идентичность за пределами бинарных и небинарных концепций гендера, самостоятельная и независимая.', descEn: 'An identity existing outside of binary and non-binary gender concepts, autonomous and independent.' },
   { key: 'intergender', ru: 'Интергендерный', en: 'Intergender', ui: 'intergender' },
   { key: 'questioning', ru: 'В поиске', en: 'Questioning', ui: 'questioning' },
   { key: 'prefer_not', ru: 'Не хочу указывать', en: 'Prefer not to say', ui: 'hidden' },
@@ -82,15 +94,15 @@ export const BODY_MODULE_LABELS = Object.fromEntries(BODY_MODULE_OPTIONS.map(ite
 BODY_MODULE_LABELS.sperm_fertility = BODY_MODULE_LABELS.sperm_related_fertility
 
 export const ORIENTATIONS = [
-  { key: 'heterosexual', ru: 'Гетеросексуальная/ый', en: 'Heterosexual' },
-  { key: 'gay', ru: 'Гей', en: 'Gay' },
-  { key: 'lesbian', ru: 'Лесбиянка', en: 'Lesbian' },
-  { key: 'bisexual', ru: 'Бисексуальная/ый', en: 'Bisexual' },
-  { key: 'pansexual', ru: 'Пансексуальная/ый', en: 'Pansexual' },
-  { key: 'asexual', ru: 'Асексуальная/ый', en: 'Asexual' },
-  { key: 'demisexual', ru: 'Демисексуальная/ый', en: 'Demisexual' },
-  { key: 'queer', ru: 'Квир', en: 'Queer' },
-  { key: 'questioning', ru: 'В поиске', en: 'Questioning' },
+  { key: 'heterosexual', ru: 'Гетеросексуальная/ый', en: 'Heterosexual', descRu: 'Романтическое и/или сексуальное влечение к людям противоположного гендера.', descEn: 'Romantic and/or sexual attraction to people of a different gender.' },
+  { key: 'gay', ru: 'Гей', en: 'Gay', descRu: 'Мужчина, испытывающий влечение к другим мужчинам. Иногда используется как общий термин для гомосексуальности.', descEn: 'A man attracted to other men. Sometimes used as a general term for homosexuality.' },
+  { key: 'lesbian', ru: 'Лесбиянка', en: 'Lesbian', descRu: 'Женщина или небинарный человек, испытывающий влечение преимущественно к женщинам.', descEn: 'A woman or non-binary person attracted primarily to women.' },
+  { key: 'bisexual', ru: 'Бисексуальная/ый', en: 'Bisexual', descRu: 'Влечение к людям своего и других гендеров. Не требует «одинакового» влечения к разным гендерам.', descEn: 'Attraction to people of one\'s own and other genders. Does not require equal attraction to different genders.' },
+  { key: 'pansexual', ru: 'Пансексуальная/ый', en: 'Pansexual', descRu: 'Влечение к людям вне зависимости от их гендера. Гендер партнёра не является определяющим фактором.', descEn: 'Attraction to people regardless of their gender. Partner\'s gender is not a defining factor.' },
+  { key: 'asexual', ru: 'Асексуальная/ый', en: 'Asexual', descRu: 'Отсутствие или слабое сексуальное влечение к другим людям. Может сопровождаться романтическим влечением.', descEn: 'Little or no sexual attraction to others. May still experience romantic attraction.' },
+  { key: 'demisexual', ru: 'Демисексуальная/ый', en: 'Demisexual', descRu: 'Сексуальное влечение возникает только после формирования глубокой эмоциональной связи. Относится к асексуальному спектру.', descEn: 'Sexual attraction only arises after forming a deep emotional bond. Part of the asexual spectrum.' },
+  { key: 'queer', ru: 'Квир', en: 'Queer', descRu: 'Зонтичный термин для людей с нетрадиционными гендерными или сексуальными идентичностями. Используется как самоназвание.', descEn: 'An umbrella term for people with non-normative gender or sexual identities, used as self-identification.' },
+  { key: 'questioning', ru: 'В поиске', en: 'Questioning', descRu: 'Человек, исследующий или сомневающийся в своей сексуальной ориентации или гендерной идентичности.', descEn: 'A person exploring or questioning their sexual orientation or gender identity.' },
   { key: 'prefer_not', ru: 'Не хочу указывать', en: 'Prefer not to say' },
   { key: 'custom', ru: 'Другой вариант', en: 'Other' },
 ]
@@ -170,13 +182,7 @@ export function resolveProfileModules(profile = {}) {
   const bodyModules = resolveBodyModules(profile)
   const has = key => bodyModules.includes(key) || (key === 'sperm_related_fertility' && bodyModules.includes('sperm_fertility')) || (key === 'sperm_fertility' && bodyModules.includes('sperm_related_fertility'))
   const spermSide = has('sperm_related_fertility') || has('sperm_fertility') || ['cis_man', 'trans_woman'].includes(gender)
-  // Мужчина без явного включения цикла — цикл не показываем
-  const rawGenderPm = profile?.gender || profile?.gender_identity || ''
-  const isMaleProfilePm = ['cis_man', 'male', 'man'].includes(rawGenderPm)
-  const explicitCyclePm = has('cycle')
-  const cycleSide = explicitCyclePm || (
-    ['cis_woman', 'trans_man'].includes(gender) && !isMaleProfilePm
-  ) || (isMaleProfilePm && explicitCyclePm)
+  const cycleSide = has('cycle') || ['cis_woman', 'trans_man'].includes(gender)
 
   const modules = {
     cycle: false,
@@ -210,9 +216,7 @@ export function resolveProfileModules(profile = {}) {
     dysphoria: false,
   }
 
-  // Для мужчин цикл включается ТОЛЬКО если явно добавлен в body_modules
-  const isMalePm = ['cis_man', 'male', 'man'].includes(rawGenderPm)
-  if ((has('cycle') || bodyMode === 'menstruating') && (!isMalePm || has('cycle'))) {
+  if (has('cycle') || bodyMode === 'menstruating') {
     modules.cycle = true
     modules.periodPrediction = true
     modules.bleedingTracking = true

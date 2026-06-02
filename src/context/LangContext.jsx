@@ -366,6 +366,7 @@ export function LangProvider({ children }) {
   const [lang, setLangState] = useState(() => localStorage.getItem('lang') || 'ru')
   const [t, setT] = useState(() => translations['ru'])
   const [translating, setTranslating] = useState(false)
+  const [directCache, setDirectCache] = useState({}) // { "ru строка" -> "перевод" }
 
   const applyLang = useCallback(async (l) => {
     setLangState(l)
@@ -392,6 +393,7 @@ export function LangProvider({ children }) {
       const entries = Object.entries(flatStrings)
       const BATCH = 60
       const allTranslated = {}
+      const newDirectCache = {}
       
       for (let i = 0; i < entries.length; i += BATCH) {
         const batch = Object.fromEntries(entries.slice(i, i + BATCH))
@@ -400,6 +402,8 @@ export function LangProvider({ children }) {
             body: { userId: 'system', requestType: 'translate_ui', targetLang: l, strings: batch }
           })
           if (data?.translated) Object.assign(allTranslated, data.translated)
+          // Строим directCache — маппинг "ru строка" -> "перевод"
+          if (data?.directMap) Object.assign(newDirectCache, data.directMap)
         } catch (batchErr) {
           console.warn('Translation batch failed, skipping:', batchErr)
           // Оставляем русские строки для этого батча
@@ -407,6 +411,7 @@ export function LangProvider({ children }) {
         }
       }
 
+      setDirectCache(newDirectCache)
       setCache(l, allTranslated)
       setT(applyTranslations(translations['ru'], allTranslated))
     } catch (e) {
@@ -424,7 +429,7 @@ export function LangProvider({ children }) {
   const setLang = (l) => applyLang(l)
 
   return (
-    <LangContext.Provider value={{ lang, setLang, t, translating }}>
+    <LangContext.Provider value={{ lang, setLang, t, directCache, translating }}>
       {translating && (
         <div style={{ position:'fixed', bottom:80, left:'50%', transform:'translateX(-50%)', zIndex:1000, background:'var(--accent)', color:'#fff', fontSize:12, padding:'6px 14px', borderRadius:20, pointerEvents:'none' }}>
           Переводим... ✦
@@ -441,17 +446,19 @@ export function useLang() {
 
 // Умная rl() - для всех языков ищет перевод в t, fallback на en
 export function useRl() {
-  const { lang, t } = useContext(LangContext)
+  const { lang, t, directCache } = useContext(LangContext)
   return (ru, en) => {
     if (lang === 'ru') return ru
     if (lang === 'en') return en
-    if (!t) return en
-    // 1. Прямой поиск в t по RU_TO_KEY маппингу
-    const key = RU_TO_KEY[ru]
-    if (key && t[key] && t[key] !== ru) return t[key]
-    // 2. Попробуем найти напрямую в t (вдруг ключ совпадает)
-    if (t[ru] && t[ru] !== ru) return t[ru]
-    // 3. Fallback - возвращаем английский вместо русского для нерусских языков
+    // 1. Прямой поиск в кэше по ru-строке (главный механизм для всех языков)
+    if (directCache && directCache[ru] && directCache[ru] !== ru) return directCache[ru]
+    // 2. Поиск по RU_TO_KEY → t ключу (legacy)
+    if (t) {
+      const key = RU_TO_KEY[ru]
+      if (key && t[key] && t[key] !== ru) return t[key]
+      if (t[ru] && t[ru] !== ru) return t[ru]
+    }
+    // 3. Fallback на английский
     return en
   }
 }

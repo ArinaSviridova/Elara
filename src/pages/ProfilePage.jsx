@@ -1,12 +1,30 @@
 import { useEffect, useState } from 'react'
 import { PinSetup } from '../components/AppLock'
 import { useNavigate } from 'react-router-dom'
-import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLang } from '../context/LangContext'
 import InfoTooltip from '../components/InfoTooltip'
-import { GENDER_IDENTITIES_EXTENDED, BODY_MODULE_OPTIONS, BODY_MODULE_LABELS, getDefaultBodyModulesForGender, resolveBodyModules, getGenderRecommendationCards } from '../lib/profileModules'
+import { GENDER_IDENTITIES_EXTENDED, ORIENTATIONS, BODY_MODULE_OPTIONS, BODY_MODULE_LABELS, getDefaultBodyModulesForGender, resolveBodyModules, getGenderRecommendationCards } from '../lib/profileModules'
+
+function IdentityInfoPopup({ item, lang, onClose }) {
+  if (!item) return null
+  const desc = lang === 'en' ? item.descEn : item.descRu
+  if (!desc) return null
+  return (
+    <div style={{ marginTop:8, padding:'10px 12px', borderRadius:10,
+      background:'rgba(167,139,250,0.08)', border:'1px solid rgba(167,139,250,0.2)',
+      fontSize:12, color:'var(--text2)', lineHeight:1.65, position:'relative' }}>
+      <button type="button" onClick={onClose}
+        style={{ position:'absolute', top:6, right:8, background:'none', border:'none',
+          color:'var(--text3)', cursor:'pointer', fontSize:14, lineHeight:1 }}>×</button>
+      <strong style={{ color:'var(--text)', display:'block', marginBottom:4 }}>
+        {lang === 'en' ? item.en : item.ru}
+      </strong>
+      {desc}
+    </div>
+  )
+}
 
 export default function ProfilePage() {
   const { user, profile, updateProfile, signOut } = useAuth()
@@ -24,7 +42,8 @@ export default function ProfilePage() {
   const [birthYear, setBirthYear] = useState(profile?.birth_year || '')
   const [saving, setSaving] = useState(false)
   const [showBodyModules, setShowBodyModules] = useState(false)
-  const [showLogic, setShowLogic] = useState(false)
+  const [genderInfoKey, setGenderInfoKey] = useState(null)
+  const [orientInfoKey, setOrientInfoKey] = useState(null)
   const [saved, setSaved] = useState(false)
   const [secretTaps, setSecretTaps] = useState(0)
   const [hasPIN, setHasPIN] = useState(!!localStorage.getItem('elara_pin_hash'))
@@ -85,33 +104,6 @@ export default function ProfilePage() {
     setSaved(true); setTimeout(() => setSaved(false), 1000)
   }
 
-  async function deleteAccount() {
-    if (!window.confirm(lang === 'en'
-      ? 'Delete your account? All data will be permanently erased. This cannot be undone.'
-      : 'Удалить аккаунт? Все данные будут безвозвратно удалены. Это нельзя отменить.')) return
-    if (!window.confirm(lang === 'en' ? 'Are you absolutely sure?' : 'Ты уверена?')) return
-
-    try {
-      const uid = user.id
-      await Promise.allSettled([
-        supabase.from('cycle_entries').delete().eq('user_id', uid),
-        supabase.from('mood_entries').delete().eq('user_id', uid),
-        supabase.from('sport_logs').delete().eq('user_id', uid),
-        supabase.from('intimacy_entries').delete().eq('user_id', uid),
-        supabase.from('friendships').delete().eq('owner_id', uid),
-        supabase.from('friendships').delete().eq('friend_id', uid),
-        supabase.from('group_members').delete().eq('user_id', uid),
-        supabase.from('app_notifications').delete().eq('user_id', uid),
-        supabase.from('activity_wishes').delete().eq('user_id', uid),
-        supabase.from('profiles').delete().eq('id', uid),
-      ])
-      try { localStorage.removeItem('elara_is_admin') } catch {}
-      await signOut()
-    } catch (err) {
-      alert(lang === 'en' ? 'Error: ' + err.message : 'Ошибка: ' + err.message)
-    }
-  }
-
   function handleSecretTap() {
     const next = secretTaps + 1
     setSecretTaps(next)
@@ -167,19 +159,21 @@ export default function ProfilePage() {
         )}
       </div>
 
-      <button type="button" onClick={() => navigate('/how-it-works')}
-        style={{ width:'100%', padding:'14px 16px', borderRadius:14, cursor:'pointer',
+      {/* Ачивки */}
+      <button type="button" onClick={() => navigate('/achievements')}
+        style={{ width:'100%', padding:'12px 16px', borderRadius:12, cursor:'pointer',
           display:'flex', alignItems:'center', gap:12, textAlign:'left',
-          background:'linear-gradient(135deg, rgba(167,139,250,0.15), rgba(74,222,128,0.08))',
-          border:'1px solid rgba(167,139,250,0.35)', color:'var(--text)' }}>
-        <span style={{ fontSize:22 }}>💡</span>
+          background:'var(--bg2)', border:'1px solid var(--border)', color:'var(--text)' }}>
+        <span style={{ fontSize:20 }}>🏆</span>
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:15, fontWeight:600 }}>{lang==='en'?'App guide':'Гайд по приложению'}</div>
-          <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
-            {lang==='en'?'Navigation, AI, privacy, FAQ':'Навигация, AI, приватность, FAQ'}
+          <div style={{ fontSize:14, fontWeight:500 }}>
+            {lang==='en'?'Achievements':'Достижения'}
+          </div>
+          <div style={{ fontSize:11, color:'var(--text3)', marginTop:1 }}>
+            {((profile?.achievements)||[]).length} {lang==='en'?'earned':'получено'}
           </div>
         </div>
-        <span style={{ fontSize:18, color:'rgba(167,139,250,0.7)' }}>›</span>
+        <span style={{ color:'var(--text3)' }}>›</span>
       </button>
 
       <button
@@ -282,6 +276,12 @@ export default function ProfilePage() {
               <option key={item.key} value={item.key}>{lang === 'en' ? item.en : item.ru}</option>
             ))}
           </select>
+          <IdentityInfoPopup
+            item={GENDER_IDENTITIES_EXTENDED.find(x => x.key === genderInfoKey)}
+            lang={lang}
+            onClose={() => setGenderInfoKey(null)}
+          />
+
           {gender === 'custom' && (
             <input
               value={customGenderLabel}
@@ -342,27 +342,16 @@ export default function ProfilePage() {
             </div>
           )}
         </div>
-        <div className="card" style={{ padding:0, overflow:'hidden' }}>
-          <button type="button" onClick={() => setShowLogic(p => !p)}
-            style={{ width:'100%', padding:'12px 14px', background:'none', border:'none',
-              display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer' }}>
-            <span style={{ fontSize:12, color:'var(--text3)', fontWeight:500 }}>
-              {lang==='en'?'Logic for your settings':'Логика под твои настройки'}
-            </span>
-            <span style={{ color:'var(--text3)', fontSize:12 }}>{showLogic ? '▲' : '▼'}</span>
-          </button>
-          {showLogic && (
-            <div style={{ padding:'0 14px 14px', borderTop:'1px solid var(--border)' }}>
-              <div style={{ display:'flex', flexDirection:'column', gap:8, marginTop:10 }}>
-                {getGenderRecommendationCards({ ...(profile || {}), gender, gender_identity: gender, body_modules: bodyModules }).map(card => (
-                  <div key={card.key} style={{ padding:'9px 10px', borderRadius:12, border:'1px solid var(--border)', background:'var(--bg3)' }}>
-                    <div style={{ fontSize:13, fontWeight:700 }}>{card.icon} {card.title}</div>
-                    <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.5, marginTop:3 }}>{card.text}</div>
-                  </div>
-                ))}
+        <div className="card" style={{ padding:14, background:'linear-gradient(135deg, rgba(167,139,250,0.12), rgba(74,222,128,0.07))', border:'1px solid var(--border)' }}>
+          <div style={{ fontSize:13, fontWeight:700, marginBottom:8 }}>✨ {lang==='en'?'Logic for your settings':'Логика под твои настройки'}</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {getGenderRecommendationCards({ ...(profile || {}), gender, gender_identity: gender, body_modules: bodyModules }, lang).map(card => (
+              <div key={card.key} style={{ padding:'9px 10px', borderRadius:12, border:'1px solid var(--border)', background:'rgba(255,255,255,0.035)' }}>
+                <div style={{ fontSize:13, fontWeight:700 }}>{card.icon} {card.title}</div>
+                <div style={{ fontSize:12, color:'var(--text2)', lineHeight:1.5, marginTop:3 }}>{card.text}</div>
               </div>
-            </div>
-          )}
+            ))}
+          </div>
         </div>
 
         <div>
@@ -388,6 +377,11 @@ export default function ProfilePage() {
                   <option key={key} value={key}>{label}</option>
                 ))}
               </select>
+          <IdentityInfoPopup
+            item={ORIENTATIONS?.find(x => x.key === orientInfoKey)}
+            lang={lang}
+            onClose={() => setOrientInfoKey(null)}
+          />
               <InfoTooltip id={orientation} label={t.orientations?.[orientation]} />
             </div>
           </div>
@@ -612,7 +606,9 @@ export default function ProfilePage() {
         <button className="btn btn-ghost" onClick={() => navigate('/subscription')} style={{ justifyContent:'flex-start', gap:10, borderColor:'var(--accent)', color:'var(--accent)' }}>
           ✦ {lang==='en'?'Subscription':'Подписка'}
         </button>
-        
+        <button className="btn btn-ghost" onClick={() => navigate('/how-it-works')} style={{ justifyContent:'flex-start', gap:10 }}>
+          💡 {lang==='en'?'How Elara works':'Как работает Elara'}
+        </button>
         <button className="btn btn-ghost" onClick={() => navigate('/research')} style={{ justifyContent:'flex-start', gap:10 }}>
           📚 {lang==='en'?'Research base':'Научная база'}
         </button>
@@ -647,18 +643,6 @@ export default function ProfilePage() {
         })}
 
         <button className="btn btn-ghost" onClick={signOut}>{t.signOut}</button>
-
-        {/* Удаление аккаунта — в самом низу */}
-        <div style={{ height:1, background:'var(--border)', margin:'8px 0' }} />
-        <button
-          type="button"
-          onClick={deleteAccount}
-          style={{ width:'100%', padding:'11px 14px', borderRadius:10, cursor:'pointer',
-            background:'none', border:'1px solid rgba(248,113,113,0.3)',
-            color:'rgba(248,113,113,0.7)', fontSize:13, textAlign:'center' }}
-        >
-          🗑 {lang==='en'?'Delete account':'Удалить аккаунт'}
-        </button>
 
         {/* Режим разработчика - в самом низу и только для аккаунта разработчика */}
         {user?.email === 'krimikarina@gmail.com' && (

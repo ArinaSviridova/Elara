@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { ThemeProvider } from './context/ThemeContext'
 import { LangProvider } from './context/LangContext'
+import { StyleProvider } from './context/StyleContext'
 import { SubscriptionProvider } from './context/SubscriptionContext'
 import { TeenProvider, useTeen } from './context/TeenModeContext'
 import AuthPage from './pages/AuthPage'
@@ -39,6 +40,9 @@ import AppearancePage from './pages/AppearancePage'
 import ExportPage from './pages/ExportPage'
 import ViewLogPage from './pages/ViewLogPage'
 import DysphoriaTracker from './pages/DysphoriaTracker'
+import ModulePage from './pages/ModulePage'
+import AchievementsPage from './pages/AchievementsPage'
+import AchievementToast from './components/AchievementToast'
 import ModuleConstructor from './components/ModuleConstructor'
 import BottomNav from './components/BottomNav'
 import TrialBanner from './components/TrialBanner'
@@ -67,13 +71,14 @@ function AppShell() {
   if (!user) return <AuthPage />
 
   return (
-    <SubscriptionProvider>
+    <StyleProvider>
+      <SubscriptionProvider>
       <TeenProvider>
         <TeenGate>
           <TrialBanner />
-          <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column', paddingTop:'env(safe-area-inset-top, 0px)' }}>
+          <div style={{ flex:1, overflowY:'auto', display:'flex', flexDirection:'column' }}>
             <Routes>
-              <Route path="/" element={<Navigate to="/profile" replace />} />
+              <Route path="/" element={<Navigate to="/today" replace />} />
               <Route path="/calendar" element={<CalendarPage />} />
               <Route path="/friends" element={<FriendsPage />} />
               <Route path="/diary" element={<DiaryPage />} />
@@ -101,6 +106,8 @@ function AppShell() {
               <Route path="/sport" element={<SportPage />} />
               <Route path="/tests" element={<ClinicalTestsPage />} />
               <Route path="/how-it-works" element={<HowItWorksPage />} />
+              <Route path="/module/:moduleKey" element={<ModulePage />} />
+              <Route path="/achievements" element={<AchievementsPage />} />
               <Route path="/body-mode" element={<BodyModePage />} />
               <Route path="/onboarding" element={<OnboardingPage />} />
               <Route path="/avatar" element={<AvatarPage />} />
@@ -114,10 +121,12 @@ function AppShell() {
               <Route path="*" element={<Navigate to="/" />} />
             </Routes>
           </div>
-          <BottomNav />
+          <AchievementToast />
+      <BottomNav />
         </TeenGate>
       </TeenProvider>
     </SubscriptionProvider>
+      </StyleProvider>
   )
 }
 

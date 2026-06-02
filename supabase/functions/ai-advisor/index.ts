@@ -946,7 +946,12 @@ RULES:
       const raw = d.choices?.[0]?.message?.content?.trim() || '{}'
       let translated: Record<string, string> = {}
       try { translated = JSON.parse(raw) } catch { translated = {} }
-      return new Response(JSON.stringify({ translated }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+      // directMap: { "ru value" -> "translated value" } для быстрого rl() поиска
+      const directMap: Record<string, string> = {}
+      for (const [k, v] of Object.entries(strings)) {
+        if (translated[k] && translated[k] !== v) directMap[String(v)] = translated[k]
+      }
+      return new Response(JSON.stringify({ translated, directMap }), { headers: { ...cors, 'Content-Type': 'application/json' } })
     }
 
     // ── AUTO DETECT LANGUAGE ────────────────────────────────
