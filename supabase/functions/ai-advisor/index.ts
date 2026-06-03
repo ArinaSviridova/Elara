@@ -419,6 +419,20 @@ Return JSON: {"isCondition": true/false, "normalized": "правильное н�
       return new Response(JSON.stringify(parsed), { headers: { ...cors, 'Content-Type': 'application/json' } })
     }
 
+    if (requestType === 'describe_condition') {
+      const conditionName = String(body.condition || body.input || '').trim()
+      const targetLang = body.language || 'ru'
+      const isRu = targetLang !== 'en'
+      const sys = isRu
+        ? 'Ты медицинский справочник в приложении для здоровья Elara. Дай краткое (3-4 предложения) справочное описание медицинского состояния на русском языке. Elara не ставит диагнозов. Заверши фразой: "Обсуди это состояние с врачом."'
+        : 'You are a medical reference in Elara health app. Give a brief (3-4 sentences) reference description of the medical condition in English. Elara does not diagnose. End with: "Discuss this with your doctor."'
+      const text = await callOpenAI(sys, conditionName, 0.3)
+      return new Response(JSON.stringify({ description: text }), {
+        headers: { ...cors, 'Content-Type': 'application/json' }
+      })
+    }
+
+
 
     // ── HEALTH CONDITION CONTEXT ──────────────────────────────
     if (requestType === 'health_condition_context') {

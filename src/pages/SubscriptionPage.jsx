@@ -24,24 +24,49 @@ export default function SubscriptionPage() {
     en: ['Everything in Plus', 'Teen mode + parental control', 'Up to 10 people', 'AI personalization', 'Intimacy tracker', 'Hidden partner for teens', 'Priority support'],
   }
 
-  // Определяем валюту по локали устройства
-  const locale = navigator.language || navigator.languages?.[0] || 'ru-RU'
-  const region = locale.split('-')[1] || locale.split('_')[1] || ''
-  
-  // Базовые цены в USD: Plus год $19.9, Plus мес $3.99, Family год $34.9, Family мес $5.99
-  const RATES = { RU: 90, UA: 41, BY: 3.2, KZ: 450, GE: 2.7, AM: 390, AZ: 1.7, MD: 18, UZ: 12500, KG: 89 }
-  const SYMBOLS = { RU: '₽', UA: '₴', BY: 'Br', KZ: '₸', GE: '₾', AM: '֏', AZ: '₼', MD: 'L', UZ: "so'm", KG: 'с' }
-  
-  function getLocalPrice(usdAmount, period) {
-    const rate = RATES[region]
-    if (!rate) return period === 'yr' ? `$${usdAmount}/yr` : `$${usdAmount}/mo`
-    const raw = usdAmount * rate
-    // Округляем до ближайших 50
-    const rounded = Math.ceil(raw / 50) * 50
-    const sym = SYMBOLS[region]
-    const periodLabel = period === 'yr' ? (lang === 'en' ? '/yr' : '/год') : (lang === 'en' ? '/mo' : '/мес')
-    return `${rounded.toLocaleString()} ${sym}${periodLabel}`
-  }
+  // Определяем валюту по Intl.Locale — БЕЗ российских рублей
+  const getLocalPrice = (() => {
+    try {
+      // Пробуем получить регион через Intl
+      const locales = navigator.languages || [navigator.language || 'en-US']
+      let region = ''
+      for (const loc of locales) {
+        const parts = loc.split('-')
+        if (parts.length >= 2 && parts[1].length === 2) {
+          region = parts[1].toUpperCase()
+          break
+        }
+      }
+
+      // ИСКЛЮЧАЕМ Россию и Беларусь — только USD или другая локальная валюта
+      const BLOCKED = ['RU', 'BY']
+      if (BLOCKED.includes(region)) region = ''
+
+      // Разрешённые локальные валюты
+      const RATES   = { UA: 41, KZ: 450, GE: 2.7, AM: 390, AZ: 1.7, MD: 18, UZ: 12500, KG: 89, TR: 32 }
+      const SYMBOLS = { UA: '₴', KZ: '₸', GE: '₾', AM: '֏', AZ: '₼', MD: 'L', UZ: "so'm", KG: 'с', TR: '₺' }
+
+      return (usdAmount, period) => {
+        const rate = region ? RATES[region] : 0
+        const periodLabel = period === 'yr'
+          ? (lang === 'en' ? '/yr' : '/год')
+          : (lang === 'en' ? '/mo' : '/мес')
+
+        if (!rate) {
+          // USD по умолчанию
+          return `$${usdAmount}${periodLabel}`
+        }
+        const raw = usdAmount * rate
+        const rounded = Math.ceil(raw / 50) * 50
+        return `${rounded.toLocaleString()} ${SYMBOLS[region]}${periodLabel}`
+      }
+    } catch {
+      return (usdAmount, period) => {
+        const periodLabel = period === 'yr' ? '/yr' : '/mo'
+        return `$${usdAmount}${periodLabel}`
+      }
+    }
+  })()
 
   const prices = billingPeriod === 'year'
     ? { plus: getLocalPrice(19.9, 'yr'), family: getLocalPrice(34.9, 'yr') }

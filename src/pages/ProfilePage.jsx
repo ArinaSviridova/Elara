@@ -159,6 +159,22 @@ export default function ProfilePage() {
         )}
       </div>
 
+      {/* ── Гайд по приложению — сразу под аватаркой ── */}
+      <button type="button" onClick={() => navigate('/how-it-works')}
+        style={{ width:'100%', padding:'14px 16px', borderRadius:14, cursor:'pointer',
+          display:'flex', alignItems:'center', gap:12, textAlign:'left',
+          background:'linear-gradient(135deg, rgba(167,139,250,0.15), rgba(74,222,128,0.08))',
+          border:'1px solid rgba(167,139,250,0.35)', color:'var(--text)' }}>
+        <span style={{ fontSize:22 }}>💡</span>
+        <div style={{ flex:1 }}>
+          <div style={{ fontSize:15, fontWeight:600 }}>{lang==='en'?'App guide':'Гайд по приложению'}</div>
+          <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+            {lang==='en'?'Navigation, AI, privacy, FAQ':'Навигация, AI, приватность, FAQ'}
+          </div>
+        </div>
+        <span style={{ fontSize:18, color:'rgba(167,139,250,0.7)' }}>›</span>
+      </button>
+
       {/* Ачивки */}
       <button type="button" onClick={() => navigate('/achievements')}
         style={{ width:'100%', padding:'12px 16px', borderRadius:12, cursor:'pointer',
@@ -606,9 +622,7 @@ export default function ProfilePage() {
         <button className="btn btn-ghost" onClick={() => navigate('/subscription')} style={{ justifyContent:'flex-start', gap:10, borderColor:'var(--accent)', color:'var(--accent)' }}>
           ✦ {lang==='en'?'Subscription':'Подписка'}
         </button>
-        <button className="btn btn-ghost" onClick={() => navigate('/how-it-works')} style={{ justifyContent:'flex-start', gap:10 }}>
-          💡 {lang==='en'?'How Elara works':'Как работает Elara'}
-        </button>
+        
         <button className="btn btn-ghost" onClick={() => navigate('/research')} style={{ justifyContent:'flex-start', gap:10 }}>
           📚 {lang==='en'?'Research base':'Научная база'}
         </button>

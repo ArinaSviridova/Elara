@@ -33,6 +33,7 @@ export function AuthProvider({ children }) {
     const { data, error } = await supabase.auth.signUp({
       email, password,
       options: {
+        emailRedirectTo: window.location.origin + '/',
         data: {
           name,
           age_mode: ageMode,
@@ -70,10 +71,6 @@ export function AuthProvider({ children }) {
 
   async function signOut() {
     await supabase.auth.signOut()
-    setUser(null)
-    setProfile(null)
-    // Очищаем кэш админки при выходе
-    try { localStorage.removeItem('elara_is_admin') } catch {}
   }
 
   async function updateProfile(updates) {

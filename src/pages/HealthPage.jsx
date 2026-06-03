@@ -85,7 +85,7 @@ export default function HealthPage() {
   const [weight, setWeight] = useState(profile?.health?.weight || '')
   const [birthDate, setBirthDate] = useState(profile?.birth_date || '')
   const [contraception, setContraception] = useState(profile?.health?.contraception || 'none')
-  const [diseases, setDiseases] = useState(profile?.health?.diseases || [])
+  const [diseases, setDiseases] = useState([...new Set(profile?.health?.diseases || [])])
   const [customDisease, setCustomDisease] = useState('')
   const [cycleRegularity, setCycleRegularity] = useState(profile?.health?.cycle_regularity || 'unknown')
   const [avgCycleLength, setAvgCycleLength] = useState(profile?.health?.avg_cycle_length || 28)
@@ -155,37 +155,50 @@ export default function HealthPage() {
     }
   }
 
-  async function addAiConditionDescription(conditionName) {
-    // Запрашиваем AI описание
+  async function addAiConditionDescription(condition) {
+    // loading
+    setSelectedConditionInfo(prev => prev ? { ...prev, aiLoading: true } : prev)
+
     try {
-      const res = await fetch(`${import.meta.env.VITE_SUPABASE_URL}/functions/v1/ai-advisor`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json',
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}` },
-        body: JSON.stringify({
-          requestType: 'validate_condition',
-          userId: user.id,
-          condition: conditionName,
-          language: lang,
-        })
+      const { data, error } = await supabase.functions.invoke('ai-advisor', {
+        body: { requestType: 'describe_condition', userId: user.id, condition, language: lang }
       })
-      const data = await res.json()
-      const aiText = data.content?.[0]?.text || ''
-      if (aiText && aiText.length > 20) {
-        setSelectedConditionInfo(prev => ({ ...prev, aiDescription: aiText }))
-        // Сохраняем в condition_notes
-        const nextHealth = { ...(profile?.health || {}),
-          condition_notes: { ...(profile?.health?.condition_notes || {}), [conditionName]: aiText } }
-        await updateProfile({ health: nextHealth })
-        return
+      if (!error) {
+        const aiText = data?.description || ''
+        if (aiText && aiText.length > 20) {
+          setSelectedConditionInfo(prev => prev ? { ...prev, aiLoading: false, aiDescription: aiText } : prev)
+          const nextHealth = { ...(profile?.health || {}),
+            condition_notes: { ...(profile?.health?.condition_notes||{}), [condition]: { description: aiText, questions: [] } },
+            condition_sources: { ...(profile?.health?.condition_sources||{}), [condition]: rl('AI — Elara', 'AI — Elara') },
+          }
+          await updateProfile({ health: nextHealth })
+          return
+        }
       }
-    } catch {}
-    // fallback — старая логика
-    const note = buildAiConditionNote(conditionName)
+    } catch (err) {
+      console.warn('AI condition:', err)
+      // 400 = edge function не задеплоена с новым хэндлером
+      setSelectedConditionInfo(prev => prev ? {
+        ...prev, aiLoading: false,
+        aiDescription: null,
+        aiError: lang === 'en'
+          ? 'AI service unavailable. Try later or deploy the updated edge function.'
+          : 'AI сервис недоступен. Попробуй позже или задеплой обновлённую edge function.'
+      } : prev)
+    }
+
+    // Fallback
+    const note = buildAiConditionNote(condition)
     const nextHealth = { ...(profile?.health || {}),
-      condition_notes: { ...(profile?.health?.condition_notes || {}), [conditionName]: note } }
-    setSelectedConditionInfo(prev => ({ ...prev, aiDescription: note }))
+      condition_notes: { ...(profile?.health?.condition_notes||{}), [condition]: note },
+      condition_sources: { ...(profile?.health?.condition_sources||{}),
+        [condition]: rl('AI-черновик Elara, проверь с врачом', 'Elara AI draft, verify with clinician') },
+    }
     await updateProfile({ health: nextHealth })
+    setSelectedConditionInfo(prev => prev ? {
+      ...prev, aiLoading: false, aiDescription: note.description,
+      description: note.description, questions: note.questions,
+    } : prev)
   }
 
   function conditionInfo(condition) {
@@ -528,8 +541,8 @@ export default function HealthPage() {
                  'AI considers conditions in advice and analysis. Data is stored securely.')}
             </p>
             <div style={{ display:'flex', flexWrap:'wrap', gap:7 }}>
-              {[...CHRONIC_DISEASES, ...diseases.filter(d => !CHRONIC_DISEASES.includes(d))].map(d => (
-                <button key={d} onClick={() => toggleDisease(d)} style={{
+              {[...new Set([...CHRONIC_DISEASES, ...diseases.filter(d => !CHRONIC_DISEASES.includes(d))])].map((d, di) => (
+                <button key={`d-${di}-${d}`} onClick={() => toggleDisease(d)} style={{
                   padding:'7px 12px', borderRadius:20, fontSize:12, cursor:'pointer',
                   border:`1px solid ${diseases.includes(d)?'var(--accent)':'var(--border)'}`,
                   background:diseases.includes(d)?'var(--accent-soft)':'transparent',
@@ -537,7 +550,7 @@ export default function HealthPage() {
                   display:'flex', alignItems:'center', gap:4,
                 }}>
                   <span onClick={(e) => { e.stopPropagation(); toggleDisease(d) }}>{d}</span>
-                  <span onClick={(e) => { e.stopPropagation(); setSelectedConditionInfo(conditionInfo(d)) }} style={{ marginLeft:4, width:18, height:18, borderRadius:'50%', border:'1px solid var(--border)', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'var(--text3)' }}>?</span>
+                  <span onClick={(e) => { e.stopPropagation(); const info = conditionInfo(d); setSelectedConditionInfo({ ...info, aiDescription: null, aiLoading: false }) }} style={{ marginLeft:4, width:18, height:18, borderRadius:'50%', border:'1px solid var(--border)', display:'inline-flex', alignItems:'center', justifyContent:'center', fontSize:11, color:'var(--text3)' }}>?</span>
                 </button>
               ))}
             </div>
@@ -615,7 +628,7 @@ export default function HealthPage() {
         )}
 
         {selectedConditionInfo && (
-          <div className="card" style={{ padding:16, border:'1px solid rgba(167,139,250,0.35)', background:'var(--bg2)', position:'sticky', top:8, zIndex:10, position:'sticky', top:8, zIndex:10 }}>
+          <div className="card" style={{ padding:16, border:'1px solid rgba(167,139,250,0.35)', background:'var(--bg2)' }}>
             <div style={{ display:'flex', justifyContent:'space-between', gap:10 }}>
               <div style={{ fontSize:16, fontWeight:800 }}>{selectedConditionInfo.title}</div>
               <button type="button" onClick={() => setSelectedConditionInfo(null)} className="btn btn-ghost" style={{ width:'auto', padding:'4px 8px' }}>×</button>
@@ -625,15 +638,30 @@ export default function HealthPage() {
             {selectedConditionInfo.aiDescription ? (
               <div style={{ marginTop:10, padding:'10px 12px', borderRadius:10,
                 background:'rgba(74,222,128,0.07)', border:'1px solid rgba(74,222,128,0.2)' }}>
-                <div style={{ fontSize:11, color:'#4ade80', fontWeight:600, marginBottom:6 }}>
-                  ✨ AI-описание
-                </div>
+                <div style={{ fontSize:11, color:'#4ade80', fontWeight:600, marginBottom:6 }}>✨ AI-описание</div>
                 <p style={{ fontSize:12, color:'var(--text2)', lineHeight:1.65, margin:0 }}>
                   {selectedConditionInfo.aiDescription}
                 </p>
               </div>
+            ) : selectedConditionInfo.aiLoading ? (
+              <div style={{ marginTop:10, fontSize:12, color:'var(--text3)', padding:'8px 0' }}>
+                ⏳ {rl('Загружаю описание...','Loading description...')}
+              </div>
+            ) : selectedConditionInfo.aiError ? (
+              <div style={{ marginTop:8, fontSize:11, color:'rgba(248,113,113,0.8)', lineHeight:1.5 }}>
+                {selectedConditionInfo.aiError}
+                <button type="button"
+                  onClick={() => addAiConditionDescription(selectedConditionInfo.title)}
+                  style={{ marginLeft:8, background:'none', border:'none', color:'var(--accent)',
+                    cursor:'pointer', fontSize:11, textDecoration:'underline' }}>
+                  {rl('Повторить','Retry')}
+                </button>
+              </div>
             ) : (
-              <button type="button" onClick={() => addAiConditionDescription(selectedConditionInfo.title)} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12, marginTop:10 }}>
+              <button type="button"
+                onClick={() => addAiConditionDescription(selectedConditionInfo.title)}
+                className="btn btn-ghost"
+                style={{ width:'auto', padding:'7px 10px', fontSize:12, marginTop:10 }}>
                 ✨ {rl('Найти описание AI','Find AI description')}
               </button>
             )}
