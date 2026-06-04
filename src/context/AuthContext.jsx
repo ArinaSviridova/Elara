@@ -30,10 +30,15 @@ export function AuthProvider({ children }) {
 
   async function signUp(email, password, name, isTeen = false) {
     const ageMode = isTeen ? 'teen' : 'adult'
+    const cleanEmail = email.trim().toLowerCase()
+    // Используем текущий origin — работает и локально и на продакшне
+    const redirectUrl = window.location.origin + '/'
+
     const { data, error } = await supabase.auth.signUp({
-      email, password,
+      email: cleanEmail,
+      password,
       options: {
-        emailRedirectTo: window.location.origin + '/',
+        emailRedirectTo: redirectUrl,
         data: {
           name,
           age_mode: ageMode,
@@ -42,8 +47,10 @@ export function AuthProvider({ children }) {
       }
     })
 
-    // Если Supabase сразу вернул user, создаём/обновляем профиль.
-    // Если включено email-confirmation, metadata всё равно сохранится в auth.users.
+    console.log('SIGN UP RESULT:', { data, error, redirectUrl })
+
+    // Если Supabase сразу вернул user, создаем/обновляем профиль.
+    // Если включено email-confirmation, metadata все равно сохранится в auth.users.
     if (!error && data?.user?.id) {
       await supabase.from('profiles').upsert({
         id: data.user.id,
@@ -53,7 +60,7 @@ export function AuthProvider({ children }) {
       }, { onConflict: 'id' })
     }
 
-    return { error }
+    return { data, error }
   }
 
   async function signIn(email, password) {

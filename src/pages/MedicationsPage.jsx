@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import InfoTooltip from '../components/InfoTooltip'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
+import { useStyle } from '../context/StyleContext'
 import { useRl } from '../context/LangContext'
 import { isPregnancyPlanningActive, loadPregnancyToggles, savePregnancyToggles, pregnancyPlanningItems, togglePregnancyItemStatus, loadPregnancyDrafts, removePregnancyDraft } from '../lib/pregnancyPlanningUi'
 
