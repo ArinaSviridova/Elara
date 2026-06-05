@@ -534,7 +534,7 @@ export default function ProfilePage() {
           🎨 {lang==='en'?'Appearance':'Оформление'}
         </button>
         <button className="btn btn-ghost" onClick={() => navigate('/modules')} style={{ justifyContent:'flex-start', gap:10 }}>
-          ⚙️ {lang==='en'?'Module settings':'Конструктор модулей'}
+          ⚙️ {lang==='en'?'What to track':'Что отслеживать'}
         </button>
         <button className="btn btn-ghost" onClick={() => navigate('/export')} style={{ justifyContent:'flex-start', gap:10 }}>
           📋 {lang==='en'?'Doctor report / export':'Отчёт для врача'}

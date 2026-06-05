@@ -4,18 +4,34 @@ import { useLang } from '../context/LangContext'
 import { APP_ZONES, FEATURE_PLACEMENT } from '../lib/featureMap'
 
 const BASE_ITEMS = [
-  { titleRu:'Добавить таблетку', titleEn:'Add medication', path:'/medications', icon:'💊', tags:'лекарства таблетки препарат назначение' },
-  { titleRu:'Загрузить анализ', titleEn:'Upload lab report', path:'/health-archive', icon:'🧪', tags:'анализы pdf архив врач' },
-  { titleRu:'Что назначил врач', titleEn:'Prescriptions', path:'/health', icon:'📋', tags:'назначения врач рекомендации лекарства анализы' },
-  { titleRu:'Прививки', titleEn:'Vaccines', path:'/health', icon:'💉', tags:'вакцина вакцинация прививки впч tdap mmr' },
-  { titleRu:'Чекапы', titleEn:'Checkups', path:'/health', icon:'🧾', tags:'чекап обследование проверить врач' },
-  { titleRu:'Экстренный профиль', titleEn:'Emergency profile', path:'/health', icon:'🆘', tags:'экстренно аллергии лекарства контакт' },
+  // ── Таблетки ──
+  { titleRu:'Добавить таблетку', titleEn:'Add medication', path:'/medications', icon:'💊', tags:'лекарства таблетки препарат добавить' },
+  { titleRu:'Внеплановое лекарство', titleEn:'Unplanned medication', path:'/medications?action=emergency', icon:'🆘', tags:'экстренно внеплановое лекарство ибупрофен эскапел антибиотик' },
+  { titleRu:'История приёма таблеток', titleEn:'Medication history', path:'/medications', icon:'📋', tags:'история приём таблетки лекарства' },
+
+  // ── Здоровье ──
+  { titleRu:'Что назначил врач', titleEn:'Prescriptions', path:'/health?tab=assignments', icon:'📋', tags:'назначения врач рекомендации лекарства' },
+  { titleRu:'Мои заболевания', titleEn:'My conditions', path:'/health?tab=diseases', icon:'🩺', tags:'заболевания диагнозы хронические состояния' },
+  { titleRu:'Контрацепция', titleEn:'Contraception', path:'/health?tab=contraception', icon:'🔵', tags:'контрацепция таблетки спираль презервативы кок' },
+  { titleRu:'Самочувствие / тело', titleEn:'Body / wellbeing', path:'/health?tab=body', icon:'💜', tags:'вес рост самочувствие тело иmt' },
+
+  // ── Анализы ──
+  { titleRu:'Загрузить анализ', titleEn:'Upload lab report', path:'/health?tab=analyses', icon:'🧪', tags:'анализы лаборатория загрузить архив' },
+  { titleRu:'Архив документов', titleEn:'Document archive', path:'/health?tab=archive', icon:'📁', tags:'документы pdf архив врач история' },
+
+  // ── Прочее ──
+  { titleRu:'Прививки', titleEn:'Vaccines', path:'/health?tab=body', icon:'💉', tags:'вакцина вакцинация прививки впч tdap' },
   { titleRu:'Отметить день в календаре', titleEn:'Mark a calendar day', path:'/calendar', icon:'◯', tags:'цикл месячные пмс овуляция фазы' },
   { titleRu:'Интимный трекер', titleEn:'Intimacy tracker', path:'/intimacy', icon:'🌹', tags:'интим секс либидо согласие' },
   { titleRu:'Дневник', titleEn:'Diary', path:'/diary', icon:'◈', tags:'дневник настроение мысли эмоции' },
-  { titleRu:'Пройти тесты', titleEn:'Take tests', path:'/tests', icon:'🧠', tags:'тесты phq gad asrs mrs тревога сдвг' },
-  { titleRu:'Персонализация AI', titleEn:'AI personalization', path:'/personalization', icon:'✨', tags:'ai персонализация модули фокусы' },
+  { titleRu:'Пройти тесты', titleEn:'Take tests', path:'/tests', icon:'🧠', tags:'тесты phq gad asrs mrs тревога сдвг депрессия' },
+  { titleRu:'Персонализация AI', titleEn:'AI personalization', path:'/personalization', icon:'✨', tags:'ai персонализация настройки что отслеживать функции' },
   { titleRu:'Синхронизация круга', titleEn:'Circle sync', path:'/friends', icon:'✦', tags:'круг друзья синхронизация доступы' },
+  { titleRu:'Гайд по приложению', titleEn:'App guide', path:'/how-it-works', icon:'💡', tags:'гайд помощь как работает faq' },
+  { titleRu:'Настройки профиля', titleEn:'Profile settings', path:'/profile', icon:'🧬', tags:'профиль настройки гендер режим тела' },
+  { titleRu:'Достижения', titleEn:'Achievements', path:'/achievements', icon:'🏆', tags:'ачивки достижения прогресс' },
+  { titleRu:'Питание и меню', titleEn:'Nutrition & menu', path:'/nutrition', icon:'🥗', tags:'питание меню рецепты кбжу калории диета еда' },
+  { titleRu:'Спорт и активность', titleEn:'Sport & activity', path:'/sport', icon:'🏃', tags:'спорт тренировка активность движение' },
 ]
 
 export default function SearchPage() {

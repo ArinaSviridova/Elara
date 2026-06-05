@@ -164,7 +164,7 @@ export default function ModuleConstructor({ onSave, initialModules, compact }) {
       })}
 
       <div style={{ fontSize:11, color:'var(--text3)', lineHeight:1.6 }}>
-        {rl('Выбрано модулей: ','Modules selected: ')}<strong style={{ color:'var(--accent)' }}>{activeModules.length}</strong> {rl('из','of')} {ALL_MODULES.length}
+        {rl('Включено функций: ','Features enabled: ')}<strong style={{ color:'var(--accent)' }}>{activeModules.length}</strong> {rl('из','of')} {ALL_MODULES.length}
       </div>
 
       <button onClick={save} className="btn btn-primary">

@@ -97,6 +97,16 @@ export default function HealthPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [selectedConditionInfo, setSelectedConditionInfo] = useState(null)
+  const [hasNutritionMenu, setHasNutritionMenu] = useState(false)
+
+  // Проверяем есть ли меню питания
+  useEffect(() => {
+    if (!user?.id) return
+    try {
+      const raw = localStorage.getItem(`elara_last_menu_${user.id}`)
+      setHasNutritionMenu(!!raw)
+    } catch {}
+  }, [user?.id])
 
   // ИМТ
   const bmi = height && weight ? (parseFloat(weight) / ((parseFloat(height)/100)**2)).toFixed(1) : null
@@ -408,6 +418,52 @@ export default function HealthPage() {
             </div>
           </>
         )}
+
+        {/* Питание */}
+        {hasNutritionMenu && (
+          <div style={{ padding:'10px 14px', borderRadius:10, marginTop:4,
+            background:'rgba(74,222,128,0.08)', border:'1px solid rgba(74,222,128,0.2)',
+            display:'flex', alignItems:'center', gap:10, fontSize:12 }}>
+            <span>✅</span>
+            <span style={{ color:'var(--text2)', flex:1 }}>
+              {rl('Меню на неделю готово','Weekly menu is ready')}
+            </span>
+            <button type="button" onClick={() => navigate('/today')}
+              style={{ color:'#4ade80', background:'none', border:'none', cursor:'pointer', fontSize:12, fontWeight:600 }}>
+              {rl('Сегодня →','Today →')}
+            </button>
+          </div>
+        )}
+        {/* Рекомендации по тренировкам */}
+        <button type="button" onClick={() => navigate('/sport')}
+          style={{ width:'100%', padding:'14px 16px', borderRadius:14, cursor:'pointer',
+            display:'flex', alignItems:'center', gap:12, textAlign:'left',
+            background:'linear-gradient(135deg, rgba(251,191,36,0.10), rgba(251,113,133,0.05))',
+            border:'1px solid rgba(251,191,36,0.25)', color:'var(--text)', marginTop:4 }}>
+          <span style={{ fontSize:22 }}>🏋️</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:600 }}>{rl('Тренировки и активность','Workouts & activity')}</div>
+            <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+              {rl('AI-план с учётом здоровья, цикла и добавок','AI plan considering health, cycle & supplements')}
+            </div>
+          </div>
+          <span style={{ color:'rgba(251,191,36,0.7)', fontSize:18 }}>›</span>
+        </button>
+
+        <button type="button" onClick={() => navigate('/nutrition')}
+          style={{ width:'100%', padding:'14px 16px', borderRadius:14, cursor:'pointer',
+            display:'flex', alignItems:'center', gap:12, textAlign:'left',
+            background:'linear-gradient(135deg, rgba(74,222,128,0.12), rgba(167,139,250,0.08))',
+            border:'1px solid rgba(74,222,128,0.3)', color:'var(--text)', marginTop:8 }}>
+          <span style={{ fontSize:22 }}>🥗</span>
+          <div style={{ flex:1 }}>
+            <div style={{ fontSize:14, fontWeight:600 }}>{rl('Питание и меню', 'Nutrition & menu')}</div>
+            <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+              {rl('AI-меню на неделю, рецепты, учёт КБЖУ', 'AI weekly menu, recipes, macros')}
+            </div>
+          </div>
+          <span style={{ color:'rgba(74,222,128,0.7)', fontSize:18 }}>›</span>
+        </button>
 
         {/* Месячные */}
         {tab === 'period' && (

@@ -15,7 +15,7 @@ import {
 const MODE_RECOMMENDATIONS = {
   menstruating: [
     'Календарь цикла, фазы, боль, объём и симптомы по дням.',
-    'Контрацепция, СТМ или овуляция будут доступны как дополнительные модули, если ты их включишь.',
+    'Контрацепция, СТМ или овуляция будут доступны как дополнительные функции, если ты их включишь.',
     'Если боль, кровотечение или ПМС повторяются, Elara поможет собрать факты для отчёта врачу.',
   ],
   amenorrhea: [
@@ -445,7 +445,7 @@ export default function BodyModePage() {
 
       <div className="card" style={{ padding:15 }}>
         <button type="button" onClick={() => setOpenBlock(openBlock === 'modules' ? null : 'modules')} style={{ width:'100%', border:'none', background:'transparent', color:'var(--text)', padding:0, display:'flex', justifyContent:'space-between', alignItems:'center', cursor:'pointer', textAlign:'left' }}>
-          <span style={{ fontSize:13, fontWeight:700 }}>{rl('Активные модули', 'Active modules')}</span>
+          <span style={{ fontSize:13, fontWeight:700 }}>{rl('Активные функции', 'Active features')}</span>
           <span style={{ color:'var(--text3)' }}>{openBlock === 'modules' ? '⌃' : '⌄'}</span>
         </button>
         {openBlock === 'modules' && (

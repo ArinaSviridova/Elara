@@ -6,6 +6,8 @@ import { ACHIEVEMENTS, getEarnedAchievements, hasAchievement } from '../lib/achi
 const CATEGORY_LABELS = {
   start:    { ru: '🚀 Старт',       en: '🚀 Start' },
   progress: { ru: '📈 Прогресс',   en: '📈 Progress' },
+  nutrition:{ ru: '🥗 Питание',     en: '🥗 Nutrition' },
+  safety:   { ru: '🆘 Безопасность', en: '🆘 Safety' },
   social:   { ru: '👥 Социальные', en: '👥 Social' },
   special:  { ru: '⭐ Особые',     en: '⭐ Special' },
 }
@@ -21,7 +23,7 @@ export default function AchievementsPage() {
   const total = ACHIEVEMENTS.length
   const earnedCount = earned.length
 
-  const categories = ['start', 'progress', 'social', 'special']
+  const categories = ['start', 'progress', 'nutrition', 'safety', 'social', 'special']
 
   return (
     <div className="page-enter" style={{ flex:1, overflowY:'auto', padding:'18px 16px 28px' }}>

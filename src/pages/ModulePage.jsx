@@ -174,7 +174,7 @@ export default function ModulePage() {
     return (
       <div className="page-enter" style={{ padding:24 }}>
         <button onClick={() => navigate(-1)} className="btn btn-ghost" style={{ width:'auto' }}>‹ {rl('Назад','Back')}</button>
-        <p style={{ color:'var(--text3)', marginTop:20 }}>{rl('Модуль не найден','Module not found')}</p>
+        <p style={{ color:'var(--text3)', marginTop:20 }}>{rl('Раздел не найден','Section not found')}</p>
       </div>
     )
   }

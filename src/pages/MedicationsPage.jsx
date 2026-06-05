@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useStyle } from '../context/StyleContext'
 import { useRl } from '../context/LangContext'
+import { useSearchParams } from 'react-router-dom'
 import { isPregnancyPlanningActive, loadPregnancyToggles, savePregnancyToggles, pregnancyPlanningItems, togglePregnancyItemStatus, loadPregnancyDrafts, removePregnancyDraft } from '../lib/pregnancyPlanningUi'
 
 const EMERGENCY_MEDS = {
@@ -69,7 +70,8 @@ export default function MedicationsPage() {
   const [intakeStatus, setIntakeStatus] = useState(() => loadJson('elara_med_intake_status', {}))
   const [medHistory, setMedHistory] = useState(() => loadJson('elara_med_history', {}))
 
-  const [showEmergency, setShowEmergency] = useState(false)
+  const [searchParams] = useSearchParams()
+  const [showEmergency, setShowEmergency] = useState(searchParams.get('action') === 'emergency')
   const [emType, setEmType] = useState('nsaid')
   const [emName, setEmName] = useState('')
   const [emCustom, setEmCustom] = useState('')

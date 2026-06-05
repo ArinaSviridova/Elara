@@ -432,6 +432,155 @@ Return JSON: {"isCondition": true/false, "normalized": "правильное н�
       })
     }
 
+    if (requestType === 'generate_nutrition') {
+      const { goal, lifestyle, diet, kcal, includeProducts, excludeProducts, allergies,
+              budget, country, batchCook, servings, withPartner, partnerName,
+              partnerKcal, partnerGoal, language: targetLang } = body
+      const isNutrRu = (targetLang || 'ru') !== 'en'
+      const openaiKey = Deno.env.get('OPENAI_API_KEY')
+      if (!openaiKey) return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not set' }), { status: 500, headers: cors })
+      const dayNames = isNutrRu
+        ? ['Понедельник','Вторник','Среда','Четверг','Пятница','Суббота','Воскресенье']
+        : ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday']
+      const goalMap: Record<string,string> = {
+        lose: isNutrRu?'похудеть':'lose weight', maintain: isNutrRu?'поддержать вес':'maintain weight',
+        gain: isNutrRu?'набрать мышечную массу':'gain muscle', energy: isNutrRu?'больше энергии':'more energy',
+        health: isNutrRu?'общее здоровье':'general health', hormones: isNutrRu?'поддержка гормонов':'hormone support',
+      }
+      const lsMap: Record<string,string> = {
+        sedentary: isNutrRu?'сидячий':'sedentary', light: isNutrRu?'лёгкая активность':'light activity',
+        moderate: isNutrRu?'умеренная активность':'moderate activity', active: isNutrRu?'активный':'active',
+        very_active: isNutrRu?'очень активный':'very active',
+      }
+      const batchNote = batchCook
+        ? (isNutrRu ? `ВАЖНО: Режим batch cooking. Готовим на ${servings||2} порции. Одно и то же блюдо повторяй ${servings||2} дня подряд. Ингредиенты в СЫРОМ/СУХОМ виде, умножь на ${servings||2}.`
+          : `IMPORTANT: Batch cooking. Prepare for ${servings||2} servings. Repeat same dish for ${servings||2} days. Ingredients in RAW/DRY weight × ${servings||2}.`)
+        : (isNutrRu ? 'ВАЖНО: Строго 1 порция на приём. Ингредиенты в СЫРОМ/СУХОМ виде.'
+          : 'IMPORTANT: Strictly 1 serving each. All ingredients in RAW/DRY weight.')
+      const partnerNote = withPartner && partnerName
+        ? (isNutrRu ? `ПАРТНЁР: ${partnerName}, цель: ${goalMap[partnerGoal]||partnerGoal}. ${partnerKcal?`Ккал партнёра: ~${partnerKcal}.`:''}. Меню для ДВОИХ, продукты на двоих.`
+          : `PARTNER: ${partnerName}, goal: ${partnerGoal}. ${partnerKcal?`Partner kcal: ~${partnerKcal}.`:''} Menu for TWO, ingredients for two.`)
+        : ''
+      const budgetNote = budget ? (isNutrRu ? `Бюджет: ${budget}/нед. Страна: ${country||'не указана'}.` : `Budget: ${budget}/week. Country: ${country||'N/A'}.`) : ''
+      const sysP = isNutrRu
+        ? 'Ты профессиональный диетолог. Составляй меню. Отвечай ТОЛЬКО валидным JSON без markdown.'
+        : 'You are a dietitian. Create meal plans. Reply ONLY valid JSON, no markdown.'
+      const uPrompt = `${isNutrRu?'Меню на 7 дней':'7-day meal plan'}:
+${isNutrRu?'Цель':'Goal'}: ${goalMap[goal]||goal}
+${isNutrRu?'Образ жизни':'Lifestyle'}: ${lsMap[lifestyle]||lifestyle}
+${isNutrRu?'Питание':'Diet'}: ${diet}
+${kcal?(isNutrRu?`Калории: ~${kcal} ккал/день`:`Calories: ~${kcal} kcal/day`):(isNutrRu?'Калории: авто':'Calories: auto')}
+${includeProducts?(isNutrRu?`Включить: ${includeProducts}`:`Include: ${includeProducts}`):''}
+${excludeProducts?(isNutrRu?`Исключить: ${excludeProducts}`:`Exclude: ${excludeProducts}`):''}
+${allergies?(isNutrRu?`Аллергии: ${allergies}`:`Allergies: ${allergies}`):''}
+${batchNote}
+${partnerNote}
+${budgetNote}
+${isNutrRu?'JSON формат':'JSON format'}: {"title":"...","kcal_per_day":0,"partner_kcal_per_day":0,"protein_g":0,"fat_g":0,"carbs_g":0,"days":[{"day":"${dayNames[0]}","meals":[{"type":"breakfast","name":"...","kcal":0,"time":"8:00"},{"type":"lunch","name":"...","kcal":0,"time":"13:00"},{"type":"dinner","name":"...","kcal":0,"time":"19:00"},{"type":"snack","name":"...","kcal":0,"time":"16:00"}]},{"day":"${dayNames[1]}","meals":[...]},{"day":"${dayNames[2]}","meals":[...]},{"day":"${dayNames[3]}","meals":[...]},{"day":"${dayNames[4]}","meals":[...]},{"day":"${dayNames[5]}","meals":[...]},{"day":"${dayNames[6]}","meals":[...]}],"tips":["...","...","..."]}`
+      const oRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini', max_tokens: 3500, temperature: 0.7,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'system', content: sysP }, { role: 'user', content: uPrompt }] })
+      })
+      const oData = await oRes.json()
+      if (!oRes.ok) return new Response(JSON.stringify({ error: oData?.error?.message||'OpenAI error' }), { status: 500, headers: cors })
+      const raw = oData.choices?.[0]?.message?.content?.trim() || ''
+      let menu: any = {}
+      try { menu = JSON.parse(raw) } catch { const m = raw.match(/\{[\s\S]*\}/); if (m) try { menu = JSON.parse(m[0]) } catch {} }
+      return new Response(JSON.stringify({ menu, raw }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+    }
+
+    if (requestType === 'get_recipe') {
+      const mealName = String(body.mealName || '').trim()
+      const targetLang = body.language || 'ru'
+      const portions = parseInt(body.portions) || 1
+      const isRecipeRu = targetLang !== 'en'
+      const openaiKey = Deno.env.get('OPENAI_API_KEY')
+      if (!openaiKey) return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not set' }), { status: 500, headers: cors })
+
+      const portionNote = portions > 1
+        ? (isRecipeRu ? `на ${portions} порции (batch cooking)` : `for ${portions} servings (batch cooking)`)
+        : (isRecipeRu ? 'на 1 порцию' : 'for 1 serving')
+
+      const sys = isRecipeRu
+        ? `Ты шеф-повар. Пиши подробные рецепты. ВСЕ ингредиенты указывай в граммах в СЫРОМ/СУХОМ виде (до термической обработки). Например: "куриное филе — 150г (сырое)", "гречка — 80г (сухая)".`
+        : `You are a chef. Write detailed recipes. ALL ingredients in RAW/DRY weight (before cooking). Example: "chicken breast — 150g (raw)", "buckwheat — 80g (dry)".`
+
+      const prompt = isRecipeRu
+        ? `Напиши подробный рецепт: "${mealName}" — ${portionNote}.
+
+## Ингредиенты (${portionNote}, всё в сыром/сухом виде):
+- ингредиент — XХг (сырое/сухое)
+
+## Приготовление:
+1. Шаг
+2. Шаг
+
+## Время: XX минут
+## Калорийность: ~XXX ккал${portions>1?` (на ${portions} порции)`:''}
+## Советы шефа:`
+        : `Write a detailed recipe for: "${mealName}" — ${portionNote}.
+
+## Ingredients (${portionNote}, all raw/dry weight):
+- ingredient — XXg (raw/dry)
+
+## Instructions:
+1. Step
+2. Step
+
+## Time: XX minutes
+## Calories: ~XXX kcal${portions>1?` (for ${portions} servings)`:''}
+## Chef tips:`
+
+      const oRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini', max_tokens: 900, temperature: 0.5,
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }] })
+      })
+      const oData = await oRes.json()
+      const recipe = oData.choices?.[0]?.message?.content?.trim() || ''
+      return new Response(JSON.stringify({ recipe }), { headers: { ...cors, 'Content-Type': 'application/json' } })
+    }
+
+    if (requestType === 'suggest_replacements') {
+      const mealName = String(body.mealName || '').trim()
+      const mealKcal = parseInt(body.mealKcal) || 400
+      const diet = String(body.diet || 'omnivore')
+      const targetLang = body.language || 'ru'
+      const isRuSug = targetLang !== 'en'
+      const openaiKey = Deno.env.get('OPENAI_API_KEY')
+      if (!openaiKey) return new Response(JSON.stringify({ error: 'no key' }), { status: 500, headers: cors })
+
+      const sys = isRuSug
+        ? 'Ты диетолог. Предлагай замены блюд с похожей калорийностью. Отвечай ТОЛЬКО JSON.'
+        : 'You are a dietitian. Suggest dish replacements with similar calories. Reply ONLY JSON.'
+
+      const prompt = isRuSug
+        ? `Предложи 5 альтернатив для блюда "${mealName}" (~${mealKcal} ккал). Тип питания: ${diet}. Калорийность каждого: ±100 ккал от ${mealKcal}.
+JSON: {"suggestions":[{"name":"...","kcal":число,"note":"почему похоже"},...]}`
+        : `Suggest 5 alternatives for "${mealName}" (~${mealKcal} kcal). Diet: ${diet}. Each ±100 kcal from ${mealKcal}.
+JSON: {"suggestions":[{"name":"...","kcal":number,"note":"why similar"},...]}`
+
+      const oRes = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${openaiKey}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: 'gpt-4o-mini', max_tokens: 400, temperature: 0.7,
+          response_format: { type: 'json_object' },
+          messages: [{ role: 'system', content: sys }, { role: 'user', content: prompt }] })
+      })
+      const oData = await oRes.json()
+      const raw = oData.choices?.[0]?.message?.content?.trim() || '{}'
+      let result: any = {}
+      try { result = JSON.parse(raw) } catch {}
+      return new Response(JSON.stringify(result), { headers: { ...cors, 'Content-Type': 'application/json' } })
+    }
+
+
+
+
 
 
     // ── HEALTH CONDITION CONTEXT ──────────────────────────────
@@ -906,7 +1055,7 @@ IMPORTANT:
       const randomSeed = Math.floor(Math.random() * 9999)
 
       const systemRu = isMale
-        ? `Ты AI-тренер в приложении Elara. Seed: ${randomSeed}. Даёшь персональную рекомендацию по типу тренировки и восстановлению на основе настроения, уровня стресса и биоритмов. Учитываешь что силовые тренировки лучше утром при пике тестостерона, кортизол снижается при йоге и МФР. 2-3 предложения. Конкретно и полезно.`
+        ? `Ты AI-тренер в приложении Elara. Seed: ${randomSeed}. Даёшь персональную рекомендацию по тренировке. Учитываешь: настроение, стресс, биоритмы, ЗАБОЛЕВАНИЯ (не назначай нагрузки противопоказанные при болезни), добавки (протеин — отметь время приёма, BCAA — до/после, креатин — ежедневно). 2-3 предложения. Конкретно и практично.`
         : `Ты AI-тренер в приложении Elara. Seed: ${randomSeed}. Даёшь рекомендацию по спорту с учётом фазы менструального цикла: фолликулярная — HIIT и кардио (гликолиз), овуляция — внимание к связкам (релаксин!), лютеиновая — силовые в умеренном темпе (жиросжигание), ПМС/период — йога, МФР, лёгкое движение. 2-3 предложения.`
 
       const prompt = [phase && `Фаза: ${phase}`, mood && `Настроение: ${mood}`, extra && extra]

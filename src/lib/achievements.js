@@ -144,6 +144,37 @@ export const ACHIEVEMENTS = [
     descEn: 'Regular movement is part of self-care',
     category: 'progress',
   },
+
+  {
+    key: 'nutrition_started',
+    emoji: '🥗',
+    color: '#4ade80',
+    titleRu: 'Питание подключено',
+    titleEn: 'Nutrition started',
+    descRu: 'Открыт раздел питания и меню',
+    descEn: 'Nutrition and meal planning opened',
+    category: 'nutrition',
+  },
+  {
+    key: 'first_aid_started',
+    emoji: '🆘',
+    color: '#fb7185',
+    titleRu: 'Паника отменяется',
+    titleEn: 'Panic cancelled',
+    descRu: 'Открыт раздел первой помощи',
+    descEn: 'First aid section opened',
+    category: 'safety',
+  },
+  {
+    key: 'kit_started',
+    emoji: '🧰',
+    color: '#60a5fa',
+    titleRu: 'Аптечка без археологии',
+    titleEn: 'Kit without archaeology',
+    descRu: 'Открыт чек-лист домашней аптечки',
+    descEn: 'Home first-aid kit checklist opened',
+    category: 'safety',
+  },
   // ── Социальные ──
   {
     key: 'first_friend',
@@ -190,10 +221,10 @@ export const ACHIEVEMENTS = [
     key: 'module_explorer',
     emoji: '🗺',
     color: '#7dd3fc',
-    titleRu: 'Исследователь',
-    titleEn: 'Explorer',
-    descRu: 'Открыл(а) 5 страниц модулей',
-    descEn: 'Opened 5 module pages',
+    titleRu: 'Любознательный',
+    titleEn: 'Curious Mind',
+    descRu: 'Открыл(а) 5 разделов о здоровье',
+    descEn: 'Opened 5 health sections',
     category: 'special',
   },
 ]
@@ -227,77 +258,119 @@ export async function earnAchievement(supabase, profile, key, updateProfile) {
  * Retroactive check — запускается один раз для существующих пользователей
  * Проверяет историю в БД и выдаёт все заслуженные ачивки
  */
-export async function retroCheckAchievements(supabase, profile, updateProfile) {
+export async function retroCheckAchievements(supabase, profile, updateProfile, userId) {
   if (!profile || !supabase) return []
-  const uid = profile.id
+  const uid = userId || profile.id
   const earned = []
+  let localProfile = { ...profile }
 
   async function award(key) {
-    if (hasAchievement(profile, key)) return
-    const ok = await earnAchievement(supabase, profile, key, updateProfile)
-    if (ok) earned.push(key)
-    // Обновим локальный профиль чтобы следующий award видел обновлённый список
-    if (ok) profile = { ...profile, achievements: [...(profile.achievements||[]), { key, earned_at: new Date().toISOString() }] }
+    if (hasAchievement(localProfile, key)) return
+    const ok = await earnAchievement(supabase, localProfile, key, updateProfile)
+    if (ok) {
+      earned.push(key)
+      localProfile = { ...localProfile,
+        achievements: [...(localProfile.achievements||[]), { key, earned_at: new Date().toISOString() }]
+      }
+    }
   }
 
-  // ── first_login — всегда ──
   await award('first_login')
 
-  // ── profile_complete ──
-  if (profile.body_mode && profile.body_mode !== 'prefer_not' && profile.gender) {
+  if (localProfile.body_mode && localProfile.body_mode !== 'prefer_not' && localProfile.gender) {
     await award('profile_complete')
   }
 
-  // ── Цикл ──
-  const { count: cycleCount } = await supabase
-    .from('cycle_entries').select('id', { count: 'exact', head: true })
-    .eq('user_id', uid)
+  // Цикл
+  try {
+    const { count: cycleCount } = await supabase
+      .from('cycle_entries').select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+    if (cycleCount > 0) await award('first_cycle_log')
+    if (cycleCount >= 21) await award('cycles_3')
+    if (cycleCount >= 42) await award('cycles_6')
+  } catch {}
 
-  if (cycleCount > 0) {
-    await award('first_cycle_log')
+  // Настроение
+  try {
+    const { count: moodCount } = await supabase
+      .from('mood_entries').select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+    if (moodCount > 0) await award('first_mood')
+    if (moodCount >= 10) await award('diary_10')
+  } catch {}
+
+  // Лекарства — таблица medications в Supabase
+  try {
+    const { count: medsCount } = await supabase
+      .from('medications').select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+    if (medsCount > 0) await award('first_medication')
+  } catch {
+    const meds = localProfile?.health?.medications || []
+    if (meds.length > 0) await award('first_medication')
   }
 
-  // Считаем уникальные циклы (cycle_number или months)
-  if (cycleCount >= 30) await award('cycles_3')
-  if (cycleCount >= 90) await award('cycles_6')
+  // Спорт
+  try {
+    const { count: sportCount } = await supabase
+      .from('sport_logs').select('id', { count: 'exact', head: true })
+      .eq('user_id', uid)
+    if (sportCount > 0) await award('first_sport')
+    if (sportCount >= 10) await award('sport_10')
+  } catch {}
 
-  // ── Настроение / дневник ──
-  const { count: moodCount } = await supabase
-    .from('mood_entries').select('id', { count: 'exact', head: true })
-    .eq('user_id', uid)
+  // Тесты — хранятся в localStorage
+  try {
+    const raw = localStorage.getItem('elara_test_results_' + uid)
+    const testResults = raw ? JSON.parse(raw) : {}
+    const testCount = Object.keys(testResults).length
+    if (testCount > 0) await award('first_test')
+    if (testCount >= 3) await award('tests_3')
+  } catch {}
 
-  if (moodCount > 0) await award('first_mood')
-  if (moodCount >= 10) await award('diary_10')
+  // Друзья
+  try {
+    const { count: friendCount } = await supabase
+      .from('friendships').select('id', { count: 'exact', head: true })
+      .eq('owner_id', uid)
+    if (friendCount > 0) await award('first_friend')
+  } catch {}
 
-  // ── Лекарства ──
-  const meds = profile?.health?.medications || profile?.health?.meds || []
-  if (meds.length > 0) await award('first_medication')
-
-  // ── Спорт ──
-  const { count: sportCount } = await supabase
-    .from('sport_logs').select('id', { count: 'exact', head: true })
-    .eq('user_id', uid)
-
-  if (sportCount > 0) await award('first_sport')
-  if (sportCount >= 10) await award('sport_10')
-
-  // ── Тесты ──
-  const testResults = profile?.test_results || {}
-  const testCount = Object.keys(testResults).length
-  if (testCount > 0) await award('first_test')
-  if (testCount >= 3) await award('tests_3')
-
-  // ── Круг / друзья ──
-  const { count: friendCount } = await supabase
-    .from('friendships').select('id', { count: 'exact', head: true })
-    .eq('owner_id', uid)
-
-  if (friendCount > 0) await award('first_friend')
-
-  // ── Беременность ──
-  if (profile?.body_mode === 'pregnancy_planning' || profile?.body_mode === 'pregnancy') {
+  // Беременность
+  if (localProfile?.body_mode === 'pregnancy_planning' ||
+      localProfile?.body_mode === 'pregnancy') {
     await award('pregnancy_prep')
   }
+
+  // Стрики — по дате создания профиля
+  try {
+    const createdAt = localProfile?.created_at || localProfile?.inserted_at
+    if (createdAt) {
+      const daysSince = (Date.now() - new Date(createdAt).getTime()) / 86400000
+      if (daysSince >= 7) await award('streak_7')
+      if (daysSince >= 30) await award('streak_30')
+    }
+  } catch {}
+
+  // Модули — localStorage
+  try {
+    const visited = JSON.parse(localStorage.getItem('elara_visited_modules') || '[]')
+    if (visited.length >= 5) await award('module_explorer')
+  } catch {}
+
+
+  // Питание - локальные меню
+  try {
+    const menus = JSON.parse(localStorage.getItem('elara_menus_' + uid) || '[]')
+    if (Array.isArray(menus) && menus.length > 0) await award('nutrition_started')
+  } catch {}
+
+  // Первая помощь / аптечка - локальные флаги
+  try {
+    const kit = JSON.parse(localStorage.getItem('elara_first_aid_kit_' + uid) || '{}')
+    if (Object.keys(kit).length > 0) await award('kit_started')
+  } catch {}
 
   return earned
 }

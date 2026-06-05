@@ -122,6 +122,15 @@ export default function TodayPage() {
   const { updateProfile } = useAuth()
   const { supabase: _sb } = {} // используем supabase из AuthContext если нужно
 
+  // Загружаем последнее меню питания
+  useEffect(() => {
+    if (!user?.id) return
+    try {
+      const raw = localStorage.getItem(`elara_last_menu_${user.id}`)
+      if (raw) setLastMenu(JSON.parse(raw))
+    } catch {}
+  }, [user?.id])
+
   // Ачивки — ретро-проверка при первом открытии
   useEffect(() => {
     if (!user || !profile) return
@@ -153,6 +162,7 @@ export default function TodayPage() {
     checkAchievements()
   }, [user?.id])
 
+  const [lastMenu, setLastMenu] = useState(null)
   const [showQuick, setShowQuick] = useState(false)
   const [detailMode, setDetailMode] = useState(
     localStorage.getItem('elara_explain_mode') || 'short'
@@ -411,6 +421,54 @@ export default function TodayPage() {
       {/* Совет на сегодня */}
       <AIAdvice cyclePhase={currentPhase} />
 
+      {/* ── Карточка питания если есть меню ── */}
+      {lastMenu && (
+        <div className="card" style={{ padding:'14px 16px',
+          background:'linear-gradient(135deg, rgba(74,222,128,0.08), rgba(167,139,250,0.05))',
+          border:'1px solid rgba(74,222,128,0.25)' }}>
+          <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
+            <span style={{ fontSize:20 }}>🥗</span>
+            <div style={{ flex:1 }}>
+              <div style={{ fontSize:13, fontWeight:600 }}>{lastMenu.title || rl('Меню на неделю','Weekly menu')}</div>
+              <div style={{ fontSize:11, color:'var(--text3)', marginTop:1 }}>
+                {lastMenu.kcal_per_day > 0 ? `${lastMenu.kcal_per_day} ${rl('ккал/день','kcal/day')} · ` : ''}
+                {rl('Готово','Ready')} ✓
+              </div>
+            </div>
+            <button type="button" onClick={() => navigate('/nutrition')}
+              style={{ padding:'6px 12px', borderRadius:8, border:'1px solid rgba(74,222,128,0.4)',
+                background:'rgba(74,222,128,0.12)', color:'#4ade80', fontSize:12, cursor:'pointer', fontWeight:500 }}>
+              {rl('Открыть','Open')}
+            </button>
+          </div>
+          {/* Показываем сегодняшний день если есть */}
+          {lastMenu.days && (() => {
+            const dayNames = ['Воскресенье','Понедельник','Вторник','Среда','Четверг','Пятница','Суббота']
+            const todayName = dayNames[new Date().getDay()]
+            const todayPlan = lastMenu.days.find(d => d.day === todayName) || lastMenu.days[0]
+            if (!todayPlan) return null
+            return (
+              <div style={{ borderTop:'1px solid rgba(74,222,128,0.15)', paddingTop:10 }}>
+                <div style={{ fontSize:11, color:'#4ade80', fontWeight:600, marginBottom:6 }}>
+                  📅 {todayName || rl('Сегодня','Today')}
+                </div>
+                <div style={{ display:'flex', flexDirection:'column', gap:3 }}>
+                  {(todayPlan.meals || []).map((meal, i) => (
+                    <div key={i} style={{ display:'flex', justifyContent:'space-between', fontSize:12 }}>
+                      <span style={{ color:'var(--text2)' }}>
+                        {meal.type === 'breakfast' ? '☀️' : meal.type === 'lunch' ? '🍽' : meal.type === 'dinner' ? '🌙' : '🍎'}
+                        {' '}{meal.name}
+                      </span>
+                      <span style={{ color:'var(--text3)' }}>{meal.kcal} {rl('ккал','kcal')}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )
+          })()}
+        </div>
+      )}
+
 
 
       <button
@@ -477,6 +535,43 @@ export default function TodayPage() {
           {rl('Открыть', 'Open')} →
         </button>
       </div>
+
+      {/* Первая помощь и аптечка */}
+      <div className="card" style={{ padding:'14px', display:'flex', flexDirection:'column', gap:10 }}>
+        <div>
+          <div style={{ fontSize:13, fontWeight:700 }}>🆘 {rl('Первая помощь и аптечка', 'First aid and kit')}</div>
+          <div style={{ fontSize:11, color:'var(--text3)', marginTop:3, lineHeight:1.45 }}>
+            {rl('Алгоритмы действий, мини-тест и домашняя аптечка с ревизией.', 'Action algorithms, mini test and a home kit checklist with revision.')}
+          </div>
+        </div>
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+          <button
+            type="button"
+            onClick={() => navigate('/first-aid')}
+            style={{
+              padding:'11px 10px', borderRadius:14, border:'1px solid rgba(248,113,113,0.28)',
+              background:'rgba(248,113,113,0.08)', color:'#fecaca', cursor:'pointer', textAlign:'left',
+            }}
+          >
+            <div style={{ fontSize:18, marginBottom:4 }}>🆘</div>
+            <div style={{ fontSize:13, fontWeight:800 }}>{rl('Первая помощь', 'First aid')}</div>
+            <div style={{ fontSize:10, opacity:0.78, marginTop:3 }}>{rl('Что делать по ситуациям', 'What to do by scenario')}</div>
+          </button>
+          <button
+            type="button"
+            onClick={() => navigate('/first-aid-kit')}
+            style={{
+              padding:'11px 10px', borderRadius:14, border:'1px solid rgba(96,165,250,0.28)',
+              background:'rgba(96,165,250,0.08)', color:'#bfdbfe', cursor:'pointer', textAlign:'left',
+            }}
+          >
+            <div style={{ fontSize:18, marginBottom:4 }}>🧰</div>
+            <div style={{ fontSize:13, fontWeight:800 }}>{rl('Аптечка', 'First-aid kit')}</div>
+            <div style={{ fontSize:10, opacity:0.78, marginTop:3 }}>{rl('Наличие и ревизия', 'Stock and revision')}</div>
+          </button>
+        </div>
+      </div>
+
 
       {pregnancyActive && (
         <section

@@ -100,6 +100,16 @@ const RESEARCH_DB = [
   { id:'PMID9080920', category:'brain', year:1996, tags:['bdi','depression','screening'], title:'Psychometric properties of the Beck Depression Inventory-II', titleRu:'BDI-II: психометрические свойства шкалы депрессии', summary:'Источник для BDI-II, если приложение использует расширенную шкалу депрессивной симптоматики.', url:'https://pubmed.ncbi.nlm.nih.gov/9080920/' },
   { id:'PMID17003219', category:'brain', year:2006, tags:['who5','wellbeing','screening'], title:'The WHO-5 Well-Being Index: a systematic review', titleRu:'WHO-5: систематический обзор шкалы благополучия', summary:'Полезен для мягкого трекинга благополучия без превращения каждой просадки в диагноз.', url:'https://pubmed.ncbi.nlm.nih.gov/17003219/' },
   { id:'PMID1798888', category:'health', year:1991, tags:['ess','sleepiness','sleep'], title:'A new method for measuring daytime sleepiness: the Epworth Sleepiness Scale', titleRu:'ESS: шкала дневной сонливости', summary:'Основа для скрининга дневной сонливости и флагов к сомнологу.', url:'https://pubmed.ncbi.nlm.nih.gov/1798888/' },
+  // First aid / home safety
+  { id:'PMID33098920', category:'first_aid', year:2020, tags:['first-aid','ilcor','emergency'], title:'2020 International Consensus on First Aid Science With Treatment Recommendations', titleRu:'ILCOR 2020: международный консенсус по первой помощи', summary:'Ключевая база для первой помощи: что делать до прибытия медиков и где важны простые алгоритмы для непрофессионалов.', url:'https://pubmed.ncbi.nlm.nih.gov/33098920/' },
+  { id:'PMC5127419', category:'first_aid', year:2016, tags:['aed','defibrillation','cpr'], title:'Public access defibrillation: improving accessibility and outcomes', titleRu:'Общественный доступ к AED/дефибрилляторам', summary:'Обзор показывает пользу AED и обучения непрофессионалов: ранняя дефибрилляция повышает шансы выживания при остановке сердца.', url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC5127419/' },
+  { id:'PMID28687709', category:'first_aid', year:2017, tags:['aed','survival','cardiac-arrest'], title:'The Effects of Public Access Defibrillation on Survival After Out-of-Hospital Cardiac Arrest', titleRu:'AED и выживаемость после внебольничной остановки сердца', summary:'Систематический обзор по выживаемости при использовании AED непрофессиональными и профессиональными первыми responder-ами.', url:'https://pubmed.ncbi.nlm.nih.gov/28687709/' },
+  { id:'PMID28193791', category:'first_aid', year:2017, tags:['anaphylaxis','epinephrine','allergy'], title:'Epinephrine for First-aid Management of Anaphylaxis', titleRu:'Адреналин как первая помощь при анафилаксии', summary:'Поддерживает логику: при анафилаксии адреналин/эпинефрин должен использоваться быстро, антигистаминные не заменяют его.', url:'https://pubmed.ncbi.nlm.nih.gov/28193791/' },
+  { id:'PMID35688782', category:'first_aid', year:2022, tags:['burns','cool-running-water','first-aid'], title:'The effect of 20 minutes of cool running water first aid within three hours of thermal burn injury', titleRu:'20 минут прохладной воды при ожогах', summary:'Данные поддерживают охлаждение термического ожога прохладной проточной водой около 20 минут в первые часы после травмы.', url:'https://pubmed.ncbi.nlm.nih.gov/35688782/' },
+  { id:'PMID38982457', category:'first_aid_kit', year:2024, tags:['first-aid-kit','home','preparedness'], title:'A cross-sectional survey of first-aid kit equipment in a family in Sichuan Province', titleRu:'Домашние аптечки и готовность к первой помощи', summary:'Исследование домашней готовности: наличие аптечки связано с навыками, грамотностью и поведением в экстренных ситуациях.', url:'https://pubmed.ncbi.nlm.nih.gov/38982457/' },
+  { id:'PMC9742271', category:'first_aid_kit', year:2022, tags:['first-aid-kit','emergency-preparedness','home'], title:'The current status and factors related to the preparation of home first aid kits', titleRu:'Факторы готовности домашней аптечки', summary:'Поддерживает идею чек-листа, регулярной ревизии и привязки аптечки к реальным рискам семьи.', url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC9742271/' },
+  { id:'PMC11574791', category:'first_aid_kit', year:2024, tags:['medication-safety','home-care','errors'], title:'Enhancing safe medication use in home care', titleRu:'Безопасное использование лекарств дома', summary:'Основа для напоминаний о сроках годности, оригинальных упаковках, списке лекарств и снижении ошибок домашнего применения.', url:'https://pmc.ncbi.nlm.nih.gov/articles/PMC11574791/' },
+
 ]
 
 
@@ -214,6 +224,29 @@ const GUIDELINES_DB = [
     url:'https://wpath.org/publications/soc8/',
     tags:['wpath','soc8','gaht','trans'],
   },
+  {
+    id:'IFRC_FIRST_AID_GUIDELINES_2020',
+    body:'IFRC',
+    category:'first_aid',
+    year:2020,
+    title:'International first aid, resuscitation, and education guidelines 2020',
+    titleRu:'IFRC 2020: международные рекомендации по первой помощи и обучению',
+    summary:'Практическая рамка для первой помощи и обучения непрофессионалов: алгоритмы, безопасность, обучение и поведение свидетеля.',
+    url:'https://www.globalfirstaidcentre.org/first-aid-guidelines-2020/',
+    tags:['first-aid','education','ifrc'],
+  },
+  {
+    id:'CDC_EMERGENCY_SUPPLIES',
+    body:'CDC',
+    category:'first_aid_kit',
+    year:2025,
+    title:'Emergency supplies and preparedness',
+    titleRu:'CDC: наборы экстренной готовности и домашние запасы',
+    summary:'Источник для логики домашней аптечки, личных лекарств, контактов, документов и регулярного обновления запасов.',
+    url:'https://www.cdc.gov/emergency-preparedness/emergency-supplies/index.html',
+    tags:['cdc','preparedness','first-aid-kit'],
+  },
+
 ]
 
 const SOURCE_TABS = [
@@ -236,6 +269,8 @@ const CATEGORIES = [
   { key:'health', ru:'Общее здоровье', en:'General health', emoji:'⚕️' },
   { key:'teen', ru:'Подростки', en:'Teens', emoji:'🌱' },
   { key:'vaccines', ru:'Прививки', en:'Vaccines', emoji:'💉' },
+  { key:'first_aid', ru:'Первая помощь', en:'First aid', emoji:'🆘' },
+  { key:'first_aid_kit', ru:'Аптечка', en:'First-aid kit', emoji:'🧰' },
 ]
 
 const GUIDELINE_CATEGORIES = [
@@ -245,6 +280,8 @@ const GUIDELINE_CATEGORIES = [
   { key:'menopause', ru:'Менопауза', en:'Menopause', emoji:'🌙' },
   { key:'gender', ru:'ГАТ / ЗГТ', en:'GAHT', emoji:'🌈' },
   { key:'vaccines', ru:'Прививки', en:'Vaccines', emoji:'💉' },
+  { key:'first_aid', ru:'Первая помощь', en:'First aid', emoji:'🆘' },
+  { key:'first_aid_kit', ru:'Аптечка', en:'First-aid kit', emoji:'🧰' },
 ]
 
 const CATEGORY_MAP = Object.fromEntries(CATEGORIES.map((c) => [c.key, c]))

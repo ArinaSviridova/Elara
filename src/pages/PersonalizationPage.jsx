@@ -484,7 +484,7 @@ export default function PersonalizationPage() {
             <p style={{ margin:'6px 0 0', fontSize:12, color:'var(--text2)', lineHeight:1.55 }}>
               {completedCount
                 ? rl(`Пройдено тестов: ${completedCount}. Можно собрать стартовые фокусы и потом поправить руками.`, `${completedCount} tests completed. Build starter focus areas, then edit manually.`)
-                : rl('Пройди тесты, чтобы Elara предложила фокусы, модули и стиль поддержки.', 'Take tests so Elara can suggest focus areas, modules, and support style.')}
+                : rl('Пройди тесты, чтобы Elara предложила фокусы и стиль поддержки.', 'Take tests so Elara can suggest focus areas, modules, and support style.')}
             </p>
           </div>
           <button onClick={() => navigate('/tests')} className="btn btn-ghost" style={{ width:'auto', padding:'7px 14px', fontSize:12, flexShrink:0 }}>
@@ -516,7 +516,7 @@ export default function PersonalizationPage() {
         <div style={{ display:'grid', gridTemplateColumns:'repeat(3, 1fr)', gap:8, marginBottom:12 }}>
           {[
             ['recommended', rl('Рекомендовано','Suggested')],
-            ['all', rl('Все модули','All modules')],
+            ['all', rl('Все функции','All features')],
             ['active', rl('Активно','Active')],
           ].map(([key, label]) => (
             <button key={key} onClick={() => setTab(key)} style={{

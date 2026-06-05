@@ -41,6 +41,7 @@ import ExportPage from './pages/ExportPage'
 import ViewLogPage from './pages/ViewLogPage'
 import DysphoriaTracker from './pages/DysphoriaTracker'
 import ModulePage from './pages/ModulePage'
+import NutritionPage from './pages/NutritionPage'
 import AchievementsPage from './pages/AchievementsPage'
 import AchievementToast from './components/AchievementToast'
 import ModuleConstructor from './components/ModuleConstructor'
@@ -48,6 +49,8 @@ import BottomNav from './components/BottomNav'
 import TrialBanner from './components/TrialBanner'
 import HealthArchivePage from './pages/HealthArchivePage'
 import AvatarPage from './pages/AvatarPage'
+import FirstAidPage from './pages/FirstAidPage'
+import FirstAidKitPage from './pages/FirstAidKitPage'
 
 function TeenGate({ children }) {
   const { profile } = useAuth()
@@ -97,6 +100,9 @@ function AppShell() {
               <Route path="/admin" element={<AdminPage />} />
               <Route path="/no-period" element={<NoPeriodPage />} />
               <Route path="/teen-parent" element={<TeenSetupPage onDone={() => window.history.back()} initialStep={3} />} />
+              <Route path="/nutrition" element={<NutritionPage />} />
+              <Route path="/first-aid" element={<FirstAidPage />} />
+              <Route path="/first-aid-kit" element={<FirstAidKitPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/activity-wishlist" element={<ActivityWishlistPage />} />
               <Route path="/about" element={<AboutPage />} />
