@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useLang, useRl } from '../context/LangContext'
+import { notifyCircleChange } from '../lib/socialNotifications'
 
 // Алгоритм совпадения окошек
 function calculateHangoutScore(a, b, eventType) {
@@ -56,9 +57,12 @@ export default function DayStatusWidget({ compact = false, moodEmojis = null, to
     energy: 3, mood: 3, pain: 0, social_battery: 3, libido: 2, available: true, tags: []
   })
 
-  useEffect(() => { loadStatus() }, [])
+  useEffect(() => {
+    if (user?.id) loadStatus()
+  }, [user?.id, today])
 
   async function loadStatus() {
+    if (!user?.id) return
     const { data } = await supabase.from('day_statuses')
       .select('*').eq('user_id', user.id).eq('date', today).maybeSingle()
     if (data) { setStatus(data); setForm(data) }
@@ -66,26 +70,112 @@ export default function DayStatusWidget({ compact = false, moodEmojis = null, to
   }
 
   async function saveStatus() {
+    if (!user?.id) return
     setSaving(true)
-    await supabase.from('day_statuses').upsert(
-      { user_id: user.id, date: today, ...form },
-      { onConflict: 'user_id,date' }
-    )
-    setStatus({...form, date: today})
+    const payload = {
+      user_id: user.id,
+      date: today,
+      ...form,
+      energy: Number(form.energy || 0),
+      mood: Number(form.mood || 0),
+      pain: Number(form.pain || 0),
+      social_battery: Number(form.social_battery || 0),
+      libido: Number(form.libido || 0),
+    }
+    const { error } = await supabase.from('day_statuses').upsert(payload, { onConflict: 'user_id,date' })
+    if (!error) {
+      notifyCircleChange({
+        userId: user.id,
+        profile,
+        changeType: 'day_status',
+        details: payload,
+        lang,
+        actionUrl: '/sync',
+      }).catch(err => console.warn('day status notification failed', err))
+    }
+    setStatus(payload)
     setEditing(false)
     setSaving(false)
   }
 
-  const SliderRow = ({ label, field, min=0, max=5, emoji }) => (
-    <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:8 }}>
-      <span style={{ width:20, textAlign:'center' }}>{emoji}</span>
-      <span style={{ fontSize:12, color:'var(--text2)', minWidth:90 }}>{label}</span>
-      <input type="range" min={min} max={max} step={1} value={form[field]}
-        onChange={e => setForm(p=>({...p, [field]: Number(e.target.value)}))}
-        style={{ flex:1, accentColor:'var(--accent)' }} />
-      <span style={{ fontSize:13, fontWeight:500, minWidth:16, color:'var(--accent)' }}>{form[field]}</span>
-    </div>
-  )
+  const updateSlider = (field, value, min = 0, max = 5) => {
+    const numericValue = Number(value)
+    const safeValue = Number.isFinite(numericValue) ? Math.min(max, Math.max(min, numericValue)) : min
+    setForm(prev => ({ ...prev, [field]: safeValue }))
+  }
+
+  const SliderRow = ({ label, field, min=0, max=5, emoji }) => {
+    const trackRef = useRef(null)
+    const currentValue = Number(form[field] ?? min)
+    const percent = ((currentValue - min) / (max - min)) * 100
+
+    const setFromPointer = (event) => {
+      const track = trackRef.current
+      if (!track) return
+      const rect = track.getBoundingClientRect()
+      if (!rect.width) return
+      const clientX = event.clientX ?? event.touches?.[0]?.clientX
+      if (typeof clientX !== 'number') return
+      const rawPercent = (clientX - rect.left) / rect.width
+      const clampedPercent = Math.min(1, Math.max(0, rawPercent))
+      const nextValue = min + clampedPercent * (max - min)
+      updateSlider(field, nextValue, min, max)
+    }
+
+    const startDrag = (event) => {
+      event.preventDefault()
+      setFromPointer(event)
+      event.currentTarget.setPointerCapture?.(event.pointerId)
+    }
+
+    return (
+      <div className="fluid-slider-row" style={{ display:'flex', alignItems:'center', gap:10, marginBottom:12 }}>
+        <span style={{ width:20, textAlign:'center' }}>{emoji}</span>
+        <span style={{ fontSize:12, color:'var(--text2)', minWidth:90 }}>{label}</span>
+        <div
+          ref={trackRef}
+          className="fluid-slider"
+          role="slider"
+          aria-label={label}
+          aria-valuemin={min}
+          aria-valuemax={max}
+          aria-valuenow={currentValue}
+          tabIndex={0}
+          onPointerDown={startDrag}
+          onPointerMove={event => {
+            if (event.buttons === 1 || event.pressure > 0) setFromPointer(event)
+          }}
+          onKeyDown={event => {
+            const delta = event.shiftKey ? 0.5 : 0.1
+            if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') {
+              event.preventDefault()
+              updateSlider(field, currentValue - delta, min, max)
+            }
+            if (event.key === 'ArrowRight' || event.key === 'ArrowUp') {
+              event.preventDefault()
+              updateSlider(field, currentValue + delta, min, max)
+            }
+            if (event.key === 'Home') {
+              event.preventDefault()
+              updateSlider(field, min, min, max)
+            }
+            if (event.key === 'End') {
+              event.preventDefault()
+              updateSlider(field, max, min, max)
+            }
+          }}
+          style={{ flex:1 }}
+        >
+          <div className="fluid-slider-track" />
+          <div className="fluid-slider-fill" style={{ width:`${percent}%` }} />
+          <div className="fluid-slider-thumb" style={{ left:`${percent}%` }} />
+        </div>
+        <span style={{ fontSize:13, fontWeight:500, minWidth:32, color:'var(--accent)', textAlign:'right' }}>
+          {currentValue.toFixed(1)}
+        </span>
+      </div>
+    )
+  }
 
   if (compact && status) {
     const avgScore = ((status.energy||0)+(status.mood||0)+(5-((status.pain||0)*1.5)))/3

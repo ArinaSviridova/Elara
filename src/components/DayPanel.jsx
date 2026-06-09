@@ -8,7 +8,7 @@ export default function DayPanel({
   date, dateKey, entries, moods, userId, prediction,
   t, lang, rl, TYPE_META, MOOD_EMOJI, phaseLabel,
   onToggleType, onMarkPeriodStart, fetchData,
-  stmEnabled = false, stmLog = {}, onSaveStmLog,
+  stmEnabled = false, stmLog = {}, onSaveStmLog, canEditCycle = true,
 }) {
   const navigate = useNavigate()
   const [intimacy, setIntimacy] = useState(null)
@@ -23,12 +23,12 @@ export default function DayPanel({
   const isToday = dateKey === new Date().toISOString().slice(0,10)
   const dayEntries = entries[dateKey] || []
   const dayMoods = moods[dateKey] || []
-  const phase = prediction ? getPhaseSafe(date, prediction.predictions) : null
+  const phase = canEditCycle && prediction ? getPhaseSafe(date, prediction.predictions) : null
   const ownPeriodEntries = Object.values(entries || {}).flat().filter(e => e.user_id === userId && e.type === 'period').sort((a,b) => String(a.date).localeCompare(String(b.date)))
   const periodStartForSelected = findPeriodStart(dateKey, ownPeriodEntries)
   const periodDay = periodStartForSelected ? Math.round((new Date(dateKey + 'T00:00:00') - new Date(periodStartForSelected + 'T00:00:00')) / (1000*60*60*24)) + 1 : null
   const isPeriodMarked = dayEntries.some(e => e.type === 'period' && e.user_id === userId)
-  const shouldShowBleedingLog = isPeriodMarked || phase?.type === 'period'
+  const shouldShowBleedingLog = canEditCycle && (isPeriodMarked || phase?.type === 'period')
   const expectedPeriod = shouldShowBleedingLog ? buildPeriodDayPrediction({ health: periodProfile, periodDay: periodDay || 1, lastCycleLogs: [] }) : null
   const periodDeviations = periodLog && expectedPeriod ? detectPeriodDeviation({ todayLog: periodLog, expected: expectedPeriod }) : []
 
@@ -174,7 +174,7 @@ export default function DayPanel({
       )}
 
       {/* Отметить фазу цикла */}
-      <div>
+      {canEditCycle && <div>
         <div style={{ fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.08em', marginBottom:8 }}>
           {rl('Отметить','Mark')}
         </div>
@@ -231,7 +231,7 @@ export default function DayPanel({
               <div style={{ fontSize:11, color:'var(--text3)' }}>{rl('Боль сегодня','Pain today')}</div>
               <div style={{ fontSize:12, color:'var(--accent)' }}>{periodLog?.pain_level ?? 0}/10</div>
             </div>
-            <input type="range" min="0" max="10" step="1" value={periodLog?.pain_level ?? 0}
+            <input type="range" min="0" max="10" step="0.5" value={periodLog?.pain_level ?? 0}
               onChange={e => savePeriodDailyPatch({ pain_level:Number(e.target.value) })}
               style={{ width:'100%', accentColor:'var(--accent)', marginBottom:10 }} />
 
@@ -298,7 +298,13 @@ export default function DayPanel({
             )
           })}
         </div>
-      </div>
+      </div>}
+
+      {!canEditCycle && (
+        <div style={{ padding:'10px 12px', borderRadius:12, background:'var(--bg2)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:12, lineHeight:1.5 }}>
+          {rl('Цикл и месячные для этого профиля отключены. В этот день можно вести настроение, симптомы, интим, заметки и здоровье без фаз цикла.', 'Cycle and period tracking are disabled for this profile. You can still log mood, symptoms, intimacy, notes and health without cycle phases.')}
+        </div>
+      )}
 
       {/* STM — симптотермальный метод */}
       {stmEnabled && onSaveStmLog && (

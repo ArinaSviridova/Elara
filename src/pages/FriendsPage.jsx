@@ -70,13 +70,27 @@ export default function FriendsPage() {
   }, [view, selectedMember?.id])
 
 
-  async function ensureFriendship(friendId, relationType = 'friend', color = '#f472b6') {
+  async function ensureFriendship(friendId, relationType = 'friend', color = '#f472b6', mutual = true) {
     if (!friendId || friendId === user.id) return
+    const cleanRelation = relationType === 'group' ? 'friend' : relationType
+
+    if (mutual) {
+      const { error: rpcError } = await supabase.rpc('add_mutual_friendship', {
+        p_friend_id: friendId,
+        p_relation_type: cleanRelation,
+        p_friend_color: color,
+        p_self_color: profile?.avatar_color || '#a78bfa',
+      })
+      if (!rpcError) return
+      console.warn('Mutual friendship RPC unavailable, saving one-way friendship only:', rpcError)
+    }
+
     await supabase.from('friendships').upsert({
       owner_id: user.id,
       friend_id: friendId,
       friend_color: color,
-      relation_type: relationType === 'group' ? 'friend' : relationType,
+      relation_type: cleanRelation,
+      is_visible: true,
     }, { onConflict: 'owner_id,friend_id' })
   }
 
@@ -166,6 +180,17 @@ export default function FriendsPage() {
       }
     })
 
+    const memberGroupIds = allGroups.filter(g => !g.isOwner).map(g => g.id).filter(Boolean)
+    if (memberGroupIds.length) {
+      const { data: visibleMembers } = await supabase
+        .from('group_members')
+        .select('*, user:user_id(*)')
+        .in('group_id', memberGroupIds)
+      allGroups.forEach(g => {
+        if (!g.isOwner) g.members = (visibleMembers || []).filter(m => m.group_id === g.id)
+      })
+    }
+
     await mirrorGroupsToFriends(allGroups)
 
     const { data: freshFriends } = await supabase
@@ -222,6 +247,13 @@ export default function FriendsPage() {
         setJoinError(rl('Ты уже в этой группе','Already in this group'))
       } else {
         await ensureFriendship(group.owner_id, 'friend', joinColor)
+        const { data: groupPeers } = await supabase
+          .from('group_members')
+          .select('user_id, relation_type, member_color')
+          .eq('group_id', group.id)
+        await Promise.all((groupPeers || [])
+          .filter(peer => peer.user_id && peer.user_id !== user.id)
+          .map(peer => ensureFriendship(peer.user_id, peer.relation_type || 'friend', peer.member_color || joinColor)))
         setJoinCode(''); setJoinRelation('group'); setView('main'); fetchAll()
       }
       setJoining(false); return
@@ -245,6 +277,13 @@ export default function FriendsPage() {
         setJoinError(rl('Уже в этой группе','Already in this group'))
       } else {
         await ensureFriendship(group.owner_id, joinRelation, joinColor)
+        const { data: groupPeers } = await supabase
+          .from('group_members')
+          .select('user_id, relation_type, member_color')
+          .eq('group_id', group.id)
+        await Promise.all((groupPeers || [])
+          .filter(peer => peer.user_id && peer.user_id !== user.id)
+          .map(peer => ensureFriendship(peer.user_id, peer.relation_type || 'friend', peer.member_color || joinColor)))
         setJoinCode(''); setView('main'); fetchAll()
       }
       setJoining(false); return
@@ -263,14 +302,32 @@ export default function FriendsPage() {
       setJoining(false); return
     }
 
-    const { error } = await supabase.from('friendships').insert({
-      owner_id: user.id, friend_id: person.id, friend_color: joinColor, relation_type: joinRelation,
+    const { error: rpcError } = await supabase.rpc('add_mutual_friendship', {
+      p_friend_id: person.id,
+      p_relation_type: joinRelation,
+      p_friend_color: joinColor,
+      p_self_color: profile?.avatar_color || '#a78bfa',
     })
-    if (error) {
-      setJoinError(rl('Уже добавлен','Already added'))
-    } else {
-      setJoinCode(''); setView('main'); fetchAll()
+
+    if (rpcError) {
+      console.warn('Mutual friendship RPC unavailable, falling back to one-way add:', rpcError)
+      const { error } = await supabase.from('friendships').upsert({
+        owner_id: user.id,
+        friend_id: person.id,
+        friend_color: joinColor,
+        relation_type: joinRelation,
+        is_visible: true,
+      }, { onConflict: 'owner_id,friend_id' })
+      if (error) {
+        setJoinError(rl('Не удалось добавить. Примени SQL-миграцию add_mutual_friendship, иначе RLS не даст добавить вас друг другу автоматически.', 'Could not add. Apply the add_mutual_friendship SQL migration so RLS allows mutual adding.'))
+        setJoining(false)
+        return
+      }
     }
+
+    setJoinCode('')
+    setView('main')
+    fetchAll()
     setJoining(false)
   }
 
@@ -446,7 +503,7 @@ export default function FriendsPage() {
           </button>
         </div>
         <p style={{ fontSize:12, color:'var(--text3)', marginTop:8, lineHeight:1.5 }}>
-          {rl('Отправь этот код — человек введёт его и увидит тебя в своём круге','Share this code — they enter it to add you to their circle')}
+          {rl('Отправь этот код — человек введёт его, и вы появитесь друг у друга в круге. Да, наконец-то без ритуала взаимного ввода кодов.', 'Share this code — they enter it once, and you both appear in each other’s circle.')}
         </p>
       </div>
 

@@ -172,3 +172,135 @@ body {
   overflow-x: clip;
   max-width: 100vw;
 }
+
+/* Smooth mobile sliders */
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  touch-action: pan-y;
+  cursor: pointer;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-soft), var(--bg3));
+  border: 1px solid var(--border);
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  margin-top: -9px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.28);
+}
+input[type="range"]::-moz-range-track {
+  height: 8px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-soft), var(--bg3));
+  border: 1px solid var(--border);
+}
+input[type="range"]::-moz-range-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.28);
+}
+
+/* Extra smooth sliders for daily status values */
+.smooth-range,
+.smooth-slider-row input[type="range"] {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.smooth-range::-webkit-slider-thumb,
+.smooth-slider-row input[type="range"]::-webkit-slider-thumb {
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.smooth-range:active::-webkit-slider-thumb,
+.smooth-slider-row input[type="range"]:active::-webkit-slider-thumb {
+  transform: scale(1.08);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.34);
+}
+
+.smooth-range::-moz-range-thumb,
+.smooth-slider-row input[type="range"]::-moz-range-thumb {
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+
+.smooth-range:active::-moz-range-thumb,
+.smooth-slider-row input[type="range"]:active::-moz-range-thumb {
+  transform: scale(1.08);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.34);
+}
+
+/* Finger-first continuous sliders for “How are you today?” */
+.fluid-slider-row {
+  touch-action: pan-y;
+}
+
+.fluid-slider {
+  position: relative;
+  height: 34px;
+  min-width: 120px;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.fluid-slider:active {
+  cursor: grabbing;
+}
+
+.fluid-slider-track,
+.fluid-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 50%;
+  height: 10px;
+  transform: translateY(-50%);
+  border-radius: 999px;
+}
+
+.fluid-slider-track {
+  width: 100%;
+  background: var(--bg3);
+  border: 1px solid var(--border);
+}
+
+.fluid-slider-fill {
+  background: linear-gradient(90deg, var(--accent-soft), var(--accent));
+  pointer-events: none;
+}
+
+.fluid-slider-thumb {
+  position: absolute;
+  top: 50%;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--accent);
+  border: 3px solid var(--bg);
+  box-shadow: 0 5px 16px rgba(0,0,0,0.32);
+  pointer-events: none;
+}
+
+.fluid-slider:active .fluid-slider-thumb,
+.fluid-slider:focus-visible .fluid-slider-thumb {
+  transform: translate(-50%, -50%) scale(1.08);
+  box-shadow: 0 7px 20px rgba(0,0,0,0.38);
+}

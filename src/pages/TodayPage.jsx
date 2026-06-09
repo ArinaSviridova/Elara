@@ -168,6 +168,11 @@ export default function TodayPage() {
     localStorage.getItem('elara_explain_mode') || 'short'
   )
 
+  const rawGender = profile?.gender || profile?.gender_identity || ''
+  const explicitCycleEnabled = Array.isArray(profile?.body_modules) && profile.body_modules.includes('cycle')
+  const canTrackCycle = !(['male', 'man', 'cis_man'].includes(rawGender) && !explicitCycleEnabled)
+    && !['male', 'no_period', 'amenorrhea', 'menopause', 'pregnancy'].includes(profile?.body_mode)
+
   const rl = (ru, en) => (lang === 'en' ? en : ru)
   const { term } = useStyle()
 
@@ -254,6 +259,19 @@ export default function TodayPage() {
       onClick: () => setShowQuick(true),
     })
 
+    if (!canTrackCycle) {
+      cards.push({
+        icon: '🧭',
+        title: rl('Гайд без цикла', 'No-cycle guide'),
+        text: rl(
+          'Для мужчин и всех без месячных: зачем вести энергию, настроение, спорт, вес, здоровье и круг поддержки.',
+          'For men and no-cycle profiles: why track energy, mood, sport, weight, health, and support circle.'
+        ),
+        action: rl('Открыть гайд', 'Open guide'),
+        onClick: () => navigate('/no-cycle-guide'),
+      })
+    }
+
     if (nextVaccine) {
       cards.push({
         icon: '💉',
@@ -313,14 +331,15 @@ export default function TodayPage() {
     }
 
     return cards.slice(0, 5)
-  }, [nextVaccine, activeAssignments.length, draftCount, testCount, lang, navigate])
+  }, [nextVaccine, activeAssignments.length, draftCount, testCount, lang, navigate, canTrackCycle])
 
   const quickActions = [
     { icon: '💊', label: rl('Таблетку', 'Medication'), path: '/medications' },
     { icon: '🧪', label: rl('Анализ', 'Lab report'), path: '/health-archive' },
     { icon: '📋', label: rl('Назначение', 'Prescription'), path: '/health' },
     { icon: '💉', label: rl('Прививку', 'Vaccine'), path: '/health' },
-    { icon: '🩸', label: rl('Месячные', 'Period'), path: '/calendar' },
+    ...(canTrackCycle ? [{ icon: '🩸', label: rl('Месячные', 'Period'), path: '/calendar' }] : []),
+    { icon: '⚖️', label: rl('Вес', 'Weight'), path: '/weight' },
     { icon: '🌡', label: rl('Симптом', 'Symptom'), path: '/health' },
     { icon: '🌹', label: rl('Интим', 'Intimacy'), path: '/intimacy' },
     { icon: '◈', label: rl('Настроение', 'Mood'), path: '/diary' },
@@ -331,7 +350,7 @@ export default function TodayPage() {
     {
       icon: '◯',
       title: rl('Календарь', 'Calendar'),
-      subtitle: rl('Цикл, фазы, симптомы и отметки по дням', 'Cycle, phases, symptoms, and daily logs'),
+      subtitle: canTrackCycle ? rl('Цикл, фазы, симптомы и отметки по дням', 'Cycle, phases, symptoms, and daily logs') : rl('Календарь отметок без месячных и фаз', 'Daily logs without periods or cycle phases'),
       path: '/calendar',
     },
     {
@@ -339,6 +358,12 @@ export default function TodayPage() {
       title: rl('Здоровье', 'Health'),
       subtitle: rl('Препараты, анализы, прививки и назначения', 'Meds, labs, vaccines, and prescriptions'),
       path: '/health',
+    },
+    {
+      icon: '⚖️',
+      title: rl('Вес', 'Weight'),
+      subtitle: rl('История веса и график динамики', 'Weight history and trend chart'),
+      path: '/weight',
     },
     ...(pregnancyActive ? [{
       icon: '🕊',

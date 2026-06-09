@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { notifyCircleChange } from '../lib/socialNotifications'
 import { useAuth } from '../context/AuthContext'
 import { useStyle } from '../context/StyleContext'
 import { useLang, useRl } from '../context/LangContext'
@@ -253,16 +254,19 @@ function CycleCalendar({ calendarConfig }) {
   }, [fetchData])
 
   async function toggleType(type, dateKey) {
+    if (!showCycle && ['period','pms','ovulation','fertile'].includes(type)) return
     const existing = entries[dateKey]?.find(e => e.type===type && e.user_id===user.id)
     if (existing) {
       await supabase.from('cycle_entries').delete().eq('id', existing.id)
     } else {
       await supabase.from('cycle_entries').insert({ user_id: user.id, date: dateKey, type })
     }
+    notifyCircleChange({ userId:user.id, profile, changeType:'cycle', details:{ date:dateKey, type, removed:!!existing }, lang, actionUrl:'/calendar' }).catch(()=>{})
     fetchData()
   }
 
   async function markRange(start, end, type) {
+    if (!showCycle && ['period','pms','ovulation','fertile'].includes(type)) return
     const s = start < end ? start : end
     const e = start < end ? end : start
     const dates = datesBetween(s, e)
@@ -270,6 +274,7 @@ function CycleCalendar({ calendarConfig }) {
       dates.map(date => ({ user_id: user.id, date, type })),
       { onConflict: 'user_id,date,type', ignoreDuplicates: true }
     )
+    notifyCircleChange({ userId:user.id, profile, changeType:'cycle', details:{ date:`${s} - ${e}`, type }, lang, actionUrl:'/calendar' }).catch(()=>{})
     fetchData()
   }
 
@@ -285,16 +290,19 @@ function CycleCalendar({ calendarConfig }) {
   }
 
   async function markSingleDay(type, dateKey) {
+    if (!showCycle && ['period','pms','ovulation','fertile'].includes(type)) return
     await supabase.from('cycle_entries').upsert(
       { user_id: user.id, date: dateKey, type },
       { onConflict: 'user_id,date,type', ignoreDuplicates: true }
     )
+    notifyCircleChange({ userId:user.id, profile, changeType:'cycle', details:{ date:dateKey, type }, lang, actionUrl:'/calendar' }).catch(()=>{})
     fetchData()
   }
 
   async function deleteSingleDay(type, dateKey) {
     await supabase.from('cycle_entries')
       .delete().eq('user_id', user.id).eq('date', dateKey).eq('type', type)
+    notifyCircleChange({ userId:user.id, profile, changeType:'cycle', details:{ date:dateKey, type, removed:true }, lang, actionUrl:'/calendar' }).catch(()=>{})
     fetchData()
   }
 
@@ -328,6 +336,7 @@ function CycleCalendar({ calendarConfig }) {
         }, { onConflict: 'user_id,date' })
       }
     }
+    notifyCircleChange({ userId:user.id, profile, changeType:'mood', details:{ mood, date:dateKey }, lang, actionUrl:'/calendar' }).catch(()=>{})
     fetchData()
   }
 
@@ -782,6 +791,7 @@ function CycleCalendar({ calendarConfig }) {
           stmLog={stmLogs[selectedKey] || { date: selectedKey }}
           stmLogs={stmLogs}
           onSaveStmLog={saveStmLog}
+          canEditCycle={showCycle}
         />
       )}
 
@@ -802,6 +812,7 @@ function CycleCalendar({ calendarConfig }) {
           {[
             { icon:'💊', label:rl('Таблетки','Medications'), path:'/medications' },
             { icon:'🏃', label:rl('Спорт и активность','Sport & activity'), path:'/sport' },
+            { icon:'⚖️', label:rl('Вес и график','Weight chart'), path:'/weight' },
             { icon:'🩺', label:rl('Настройки здоровья','Health settings'), path:'/health' },
             { icon:'🔬', label:rl('Архив анализов','Health archive'), path:'/health-archive' },
             ...(enabledLayers.includes('dysphoria') ? [{ icon:'⚧', label:rl('Дневник дисфории','Dysphoria diary'), path:'/dysphoria' }] : []),
@@ -833,7 +844,7 @@ function CycleCalendar({ calendarConfig }) {
           : null
       } />}
       <InsightsWidget currentPhase={currentPhase?.type} />
-      <AIAdvice requestType="self_advice" cyclePhase={currentPhase?.type} todayMood={todayMoods[0]} />
+      <AIAdvice requestType="self_advice" cyclePhase={showCycle ? currentPhase?.type : null} todayMood={todayMoods[0]} extraContext={showCycle ? null : rl('У профиля отключён цикл. Не упоминать фазы, месячные, овуляцию и ПМС.', 'Cycle is disabled for this profile. Do not mention phases, period, ovulation or PMS.')} />
 
       {/* Подруги */}
 

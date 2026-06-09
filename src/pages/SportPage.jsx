@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext'
 import { useLang, useRl } from '../context/LangContext'
 import AIAdvice from '../components/AIAdvice'
 import { DnDActivityButton } from '../components/DnDWidget'
+import { notifyCircleChange } from '../lib/socialNotifications'
 
 const WORKOUT_CATEGORIES = [
   { key:'cardio', emoji:'❤️', ru:'Кардио', en:'Cardio', items:[
@@ -162,6 +163,19 @@ const INTENSITY = [
   { key:'intense', ru:'Интенсивная', en:'Intense', emoji:'⚡' },
 ]
 
+function sportLocalKey(userId, date) {
+  return `elara_sport_log_${userId}_${date}`
+}
+
+function readLocalSportLog(userId, date) {
+  try { return JSON.parse(localStorage.getItem(sportLocalKey(userId, date)) || 'null') } catch { return null }
+}
+
+function saveLocalSportLog(userId, date, payload) {
+  localStorage.setItem(sportLocalKey(userId, date), JSON.stringify(payload))
+}
+
+
 export default function SportPage() {
   const { user, profile } = useAuth()
   const { lang } = useLang()
@@ -178,6 +192,7 @@ export default function SportPage() {
   const [notes, setNotes] = useState('')
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [dbUnavailable, setDbUnavailable] = useState(false)
 
   const todayMood = profile?.todayMood || null
   const isMale = ['male','trans_male'].includes(profile?.gender) || ['no_period','menopause'].includes(profile?.body_mode)
@@ -189,16 +204,31 @@ export default function SportPage() {
   async function loadTodayLog() {
     if (!user?.id) return
 
-    const { data } = await supabase
+    const localLog = readLocalSportLog(user.id, today)
+    if (localLog) applySportLog(localLog)
+
+    const { data, error } = await supabase
       .from('sport_logs').select('*').eq('user_id', user.id).eq('date', today).maybeSingle()
-    if (data) {
-      setWorkouts(data.workouts || [])
-      setSupplements(data.supplements || [])
-      setIntensity(data.intensity || 'moderate')
-      setDuration(data.duration || 30)
-      setNotes(data.notes || '')
-      setCustomWorkout(data.custom_workout || '')
+    if (error) {
+      console.warn('Sport logs fallback to localStorage:', error)
+      setDbUnavailable(true)
+      return
     }
+    setDbUnavailable(false)
+    if (data) {
+      applySportLog(data)
+      saveLocalSportLog(user.id, today, data)
+    }
+  }
+
+  function applySportLog(data) {
+    if (!data) return
+    setWorkouts(data.workouts || [])
+    setSupplements(data.supplements || [])
+    setIntensity(data.intensity || 'moderate')
+    setDuration(data.duration || 30)
+    setNotes(data.notes || '')
+    setCustomWorkout(data.custom_workout || '')
   }
 
   async function handleSave() {
@@ -206,7 +236,7 @@ export default function SportPage() {
 
     setSaving(true)
 
-    const { error } = await supabase.from('sport_logs').upsert({
+    const payload = {
       user_id: user.id,
       date: today,
       workouts,
@@ -215,13 +245,20 @@ export default function SportPage() {
       duration,
       notes,
       custom_workout: customWorkout,
-    }, { onConflict: 'user_id,date' })
+    }
+
+    saveLocalSportLog(user.id, today, payload)
+
+    const { error } = await supabase.from('sport_logs').upsert(payload, { onConflict: 'user_id,date' })
 
     setSaving(false)
 
     if (error) {
-      console.error('Sport log save error:', error)
-      return
+      console.warn('Sport log was saved locally only:', error)
+      setDbUnavailable(true)
+    } else {
+      setDbUnavailable(false)
+      notifyCircleChange({ userId:user.id, profile, changeType:'sport', details:payload, lang, actionUrl:'/sport' }).catch(()=>{})
     }
 
     setSaved(true)
@@ -317,7 +354,7 @@ export default function SportPage() {
               <div style={{ fontSize:11, color:'var(--text3)' }}>{rl('Длительность','Duration')}</div>
               <div style={{ fontSize:13, fontWeight:500, color:'var(--accent)' }}>{duration} {rl('мин','min')}</div>
             </div>
-            <input type="range" min="5" max="180" step="5" value={duration}
+            <input type="range" min="5" max="180" step="1" value={duration}
               onChange={e => setDuration(Number(e.target.value))}
               style={{ width:'100%', accentColor:'var(--accent)' }} />
           </div>
@@ -388,6 +425,11 @@ export default function SportPage() {
       <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
         {saved ? '✓' : saving ? '...' : rl('Сохранить','Save')}
       </button>
+      {dbUnavailable && (
+        <div style={{ fontSize:11, color:'#fb923c', lineHeight:1.45 }}>
+          {rl('Тренировка сохранена локально. Для синхронизации между устройствами добавь таблицу sport_logs из SQL-миграции.', 'Workout saved locally. Add sport_logs from the SQL migration for cross-device sync.')}
+        </div>
+      )}
 
       {/* Научная база */}
       <div style={{ padding:'12px 14px', background:'var(--bg2)', borderRadius:10, border:'1px solid var(--border)', fontSize:11, color:'var(--text3)', lineHeight:1.7 }}>

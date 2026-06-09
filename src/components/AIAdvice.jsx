@@ -10,13 +10,35 @@ export default function AIAdvice({
   label,
   cyclePhase,
   todayMood,
-  diaryTags
+  diaryTags,
+  extraContext
 }) {
   const { user, profile } = useAuth()
   const { lang } = useLang()
   const [advice, setAdvice] = useState('')
   const [loading, setLoading] = useState(false)
   const rl = (ru, en, be) => lang === 'en' ? en : (lang === 'be' ? (be || ru) : ru)
+
+  const rawGender = profile?.gender || profile?.gender_identity || ''
+  const noCycleBodyMode = ['male', 'no_period', 'amenorrhea', 'menopause', 'pregnancy'].includes(profile?.body_mode)
+  const explicitCycleEnabled = Array.isArray(profile?.body_modules) && profile.body_modules.includes('cycle')
+  const shouldUseCycleContext = !(['male', 'man', 'cis_man'].includes(rawGender) && !explicitCycleEnabled) && !noCycleBodyMode
+  const safeCyclePhase = shouldUseCycleContext ? cyclePhase : null
+
+  const VARIETY_HINTS_RU = [
+    'Дай конкретный совет без ванны и прогулки. Пусть это будет микро-действие на 2-10 минут.',
+    'Предложи практичный совет про еду, воду, отдых, границы, быт или аптечку. Не повторяй стандартные прогулки.',
+    'Сделай совет свежим: один маленький шаг, без универсальной банальности.',
+    'Дай совет с учётом пола, body_mode и контекста. Не упоминай цикл, если он отключён.',
+    'Предложи нестандартную, но безопасную заботу: подготовить еду, снизить нагрузку, написать просьбу, проверить запас.'
+  ]
+  const VARIETY_HINTS_EN = [
+    'Give a specific tip without bath or walk. Make it a 2-10 minute micro-action.',
+    'Suggest a practical tip about food, water, rest, boundaries, home care or first-aid kit. Avoid generic walks.',
+    'Make the advice fresh: one small step, not a universal cliché.',
+    'Respect gender, body_mode and context. Do not mention cycle phases when cycle is disabled.',
+    'Suggest safe non-obvious care: prepare food, reduce load, send a request, check supplies.'
+  ]
 
   // Перевод технических ключей фаз
   const translatePhase = (phase) => {
@@ -45,6 +67,12 @@ export default function AIAdvice({
         supabase.from('cycle_entries').select('type').eq('user_id', user.id).eq('date', today).limit(1).maybeSingle(),
       ])
 
+      const storageKey = `elara_ai_advice_last_${user.id}_${requestType}`
+      const lastAdvice = localStorage.getItem(storageKey) || ''
+      const hintPool = lang === 'en' ? VARIETY_HINTS_EN : VARIETY_HINTS_RU
+      const varietySeed = `${Date.now()}-${Math.random().toString(36).slice(2)}`
+      const varietyHint = hintPool[Math.floor(Math.random() * hintPool.length)]
+
       const { data, error } = await supabase.functions.invoke('ai-advisor', {
         body: {
           userId: user.id,
@@ -53,7 +81,7 @@ export default function AIAdvice({
           groupId,
           language: lang,
           contextOverride: {
-            cyclePhase: cyclePhase || cycleEntry?.type,
+            cyclePhase: safeCyclePhase || (shouldUseCycleContext ? cycleEntry?.type : null),
             mood: todayMood || moodEntry?.mood,
             diaryTags: diaryTags || diary?.tags || [],
             bodyMode: profile?.body_mode,
@@ -63,12 +91,19 @@ export default function AIAdvice({
             pregnancyWeek: profile?.pregnancy_week,
             personalityTags: profile?.personality_tags || [],
             carePrefs: profile?.preferences?.care_prefs || [],
+            extraContext: extraContext || null,
+            varietySeed,
+            varietyHint,
+            avoidRepeating: lastAdvice,
+            avoidGenericSuggestions: ['ванна', 'прогулка', 'bath', 'walk'],
           }
         }
       })
 
       if (error) throw error
-      setAdvice(data?.advice || rl('Позаботься о себе сегодня 🤍', 'Take care of yourself today 🤍', 'Паклапаціся пра сябе сёння 🤍'))
+      const nextAdvice = data?.advice || rl('Выбери одно маленькое действие: вода, еда, отдых или честная просьба о помощи. Организм не подписывался на марафон героизма.', 'Pick one tiny action: water, food, rest, or an honest request for help. Your body did not sign up for heroic nonsense.', 'Паклапаціся пра сябе сёння 🤍')
+      setAdvice(nextAdvice)
+      localStorage.setItem(storageKey, nextAdvice)
     } catch (e) {
       console.error('AI advice error:', e)
       setAdvice(rl('Не удалось получить совет. Попробуй позже.', 'Could not get advice. Try again later.', 'Не ўдалося атрымаць параду.'))
@@ -86,8 +121,8 @@ export default function AIAdvice({
           </div>
           {!advice && !loading && (
             <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
-              {cyclePhase
-                ? rl(`Фаза: ${translatePhase(cyclePhase)}`, `Phase: ${translatePhase(cyclePhase)}`, `Фаза: ${translatePhase(cyclePhase)}`)
+              {safeCyclePhase
+                ? rl(`Фаза: ${translatePhase(safeCyclePhase)}`, `Phase: ${translatePhase(safeCyclePhase)}`, `Фаза: ${translatePhase(safeCyclePhase)}`)
                 : rl('Персональный — нажми чтобы получить', 'Personal — tap to get', 'Персанальны — націсні')}
             </div>
           )}
