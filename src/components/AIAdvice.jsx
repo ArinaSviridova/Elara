@@ -60,12 +60,38 @@ export default function AIAdvice({
     try {
       const today = new Date().toISOString().slice(0,10)
 
-      // Загружаем актуальный контекст из БД
-      const [{ data: diary }, { data: moodEntry }, { data: cycleEntry }] = await Promise.all([
-        supabase.from('diary_entries').select('tags').eq('user_id', user.id).eq('date', today).maybeSingle(),
-        supabase.from('mood_entries').select('mood').eq('user_id', user.id).eq('date', today).maybeSingle(),
-        supabase.from('cycle_entries').select('type').eq('user_id', user.id).eq('date', today).limit(1).maybeSingle(),
+      // Загружаем актуальный контекст из БД. Ошибки отдельных таблиц не должны ломать AI-совет.
+      const safeOne = async (query) => {
+        try { const { data } = await query; return data || null } catch { return null }
+      }
+      const safeMany = async (query) => {
+        try { const { data } = await query; return data || [] } catch { return [] }
+      }
+      const [diary, moodEntry, cycleEntry, dayStatus, sportLog, recentSportRows, weightRows, activeMeds, nutritionRows] = await Promise.all([
+        safeOne(supabase.from('diary_entries').select('tags, text').eq('user_id', user.id).eq('date', today).maybeSingle()),
+        safeOne(supabase.from('mood_entries').select('mood').eq('user_id', user.id).eq('date', today).maybeSingle()),
+        shouldUseCycleContext ? safeOne(supabase.from('cycle_entries').select('type').eq('user_id', user.id).eq('date', today).limit(1).maybeSingle()) : Promise.resolve(null),
+        safeOne(supabase.from('day_statuses').select('energy,mood,pain,social_battery,libido,tags').eq('user_id', user.id).eq('date', today).maybeSingle()),
+        safeOne(supabase.from('sport_logs').select('date,workouts,intensity,duration,notes,custom_workout,supplements').eq('user_id', user.id).eq('date', today).maybeSingle()),
+        safeMany(supabase.from('sport_logs').select('date,workouts,intensity,duration,notes,custom_workout,supplements').eq('user_id', user.id).order('date', { ascending:false }).limit(10)),
+        safeMany(supabase.from('weight_logs').select('date,weight_kg,note').eq('user_id', user.id).order('date', { ascending:false }).limit(10)),
+        safeMany(supabase.from('medications').select('name,dosage,med_type,times,is_active').eq('user_id', user.id).eq('is_active', true).limit(10)),
+        safeMany(supabase.from('nutrition_menus').select('title, items, days, created_at').eq('user_id', user.id).order('created_at', { ascending:false }).limit(3)),
       ])
+
+      const sortedWeights = [...(weightRows || [])].sort((a,b) => String(a.date).localeCompare(String(b.date)))
+      const firstWeight = sortedWeights[0]?.weight_kg != null ? Number(sortedWeights[0].weight_kg) : null
+      const lastWeight = sortedWeights[sortedWeights.length - 1]?.weight_kg != null ? Number(sortedWeights[sortedWeights.length - 1].weight_kg) : null
+      const weightTrend = firstWeight != null && lastWeight != null
+        ? `${firstWeight.toFixed(1)}kg -> ${lastWeight.toFixed(1)}kg (${(lastWeight - firstWeight >= 0 ? '+' : '')}${(lastWeight - firstWeight).toFixed(1)}kg)`
+        : null
+
+      const nutritionSummary = (nutritionRows || []).map(n => {
+        const meals = Array.isArray(n.days)
+          ? n.days.flatMap(d => d.meals || []).slice(0, 8).map(m => [m.type, m.name, m.kcal ? `${m.kcal}kcal` : null].filter(Boolean).join(': '))
+          : []
+        return [n.title, meals.length ? meals.join(', ') : JSON.stringify(n.items || [])].filter(Boolean).join(' - ')
+      }).filter(Boolean).join('; ')
 
       const storageKey = `elara_ai_advice_last_${user.id}_${requestType}`
       const lastAdvice = localStorage.getItem(storageKey) || ''
@@ -91,7 +117,26 @@ export default function AIAdvice({
             pregnancyWeek: profile?.pregnancy_week,
             personalityTags: profile?.personality_tags || [],
             carePrefs: profile?.preferences?.care_prefs || [],
-            extraContext: extraContext || null,
+            extraContext: [
+              extraContext,
+              dayStatus ? `today status: energy ${dayStatus.energy}, mood ${dayStatus.mood}, pain ${dayStatus.pain}, social battery ${dayStatus.social_battery}, libido ${dayStatus.libido}` : null,
+              sportLog ? `today sport: ${(sportLog.workouts || []).join(', ')}, intensity ${sportLog.intensity}, duration ${sportLog.duration} min, supplements ${(sportLog.supplements || []).join(', ') || 'none'}, notes ${sportLog.notes || 'none'}` : null,
+              recentSportRows?.length ? `recent sport history: ${recentSportRows.map(s => `${s.date}: ${(s.workouts || []).join('+') || 'none'}, ${s.intensity || 'moderate'}, ${s.duration || 0}min${s.custom_workout ? `, custom ${s.custom_workout}` : ''}${s.notes ? `, notes ${s.notes}` : ''}`).join('; ')}` : null,
+              weightRows?.length ? `recent weight logs: ${weightRows.map(w => `${w.date}:${w.weight_kg}kg`).join('; ')}${weightTrend ? ` | weight trend: ${weightTrend}` : ''}` : null,
+              activeMeds?.length ? `active meds: ${activeMeds.map(m => [m.name, m.dosage, m.med_type, Array.isArray(m.times) ? m.times.join('/') : null].filter(Boolean).join(' ')).join('; ')}` : null,
+              nutritionSummary ? `nutrition/menu context: ${nutritionSummary}` : null,
+            ].filter(Boolean).join(' | ') || null,
+            userProfileSummary: {
+              name: profile?.name,
+              gender: profile?.gender,
+              bodyMode: profile?.body_mode,
+              modules: profile?.body_modules || [],
+              goals: profile?.goals || profile?.preferences?.goals || [],
+              carePrefs: profile?.preferences?.care_prefs || [],
+            },
+            personalizationRules: shouldUseCycleContext
+              ? 'Use cycle context only when useful. Prioritize actual user data over generic wellness tips. Mention the exact relevant logs when helpful: recent workouts, weight trend, nutrition/menu and active meds. Do not invent missing data.'
+              : 'Do not mention menstrual cycle, follicular phase, ovulation, luteal phase, PMS or period. Personalize using energy, mood, sleep, recent workouts, meds, weight trend, food/menu and support context. Mention exact relevant logs when helpful and do not invent missing data.',
             varietySeed,
             varietyHint,
             avoidRepeating: lastAdvice,

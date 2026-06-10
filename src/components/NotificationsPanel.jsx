@@ -1,9 +1,10 @@
 // Панель уведомлений — встраивается в TodayPage
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useNotifications } from '../lib/useNotifications'
 import { useAuth } from '../context/AuthContext'
 import { useLang, useRl } from '../context/LangContext'
+import { enablePushNotifications, getPushState } from '../lib/pushNotifications'
 
 const PRIORITY_COLOR = {
   urgent: '#f87171',
@@ -51,6 +52,29 @@ export default function NotificationsPanel() {
 
   const [expanded, setExpanded] = useState(null)  // id открытого уведомления
   const [panelOpen, setPanelOpen] = useState(false)
+  const [pushState, setPushState] = useState({ supported: true, enabled: false, permission: 'default' })
+  const [pushBusy, setPushBusy] = useState(false)
+  const [pushError, setPushError] = useState('')
+
+  useEffect(() => {
+    if (!user?.id) return
+    getPushState(user.id).then(setPushState).catch(() => {})
+  }, [user?.id])
+
+  async function handleEnablePush(e) {
+    e.stopPropagation()
+    if (!user?.id || pushBusy) return
+    setPushBusy(true)
+    setPushError('')
+    try {
+      await enablePushNotifications(user.id)
+      setPushState(await getPushState(user.id))
+    } catch (err) {
+      setPushError(err?.message || 'Push setup failed')
+    } finally {
+      setPushBusy(false)
+    }
+  }
 
   function handleOpen(notif) {
     if (expanded === notif.id) {
@@ -73,10 +97,19 @@ export default function NotificationsPanel() {
   return (
     <div style={{ marginBottom: 4 }}>
       {/* Кнопка-заголовок панели */}
-      <button
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => {
           setPanelOpen(p => !p)
           if (!panelOpen && hasUnread) markAllRead()
+        }}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault()
+            setPanelOpen(p => !p)
+            if (!panelOpen && hasUnread) markAllRead()
+          }
         }}
         style={{
           width:'100%', padding:'12px 16px', borderRadius:14, cursor:'pointer',
@@ -85,7 +118,7 @@ export default function NotificationsPanel() {
             ? 'linear-gradient(135deg, var(--accent-soft), rgba(167,139,250,0.04))'
             : 'var(--bg2)',
           display:'flex', alignItems:'center', justifyContent:'space-between',
-          transition:'all 0.2s',
+          transition:'all 0.2s', boxSizing:'border-box',
         }}
       >
         <div style={{ display:'flex', alignItems:'center', gap:10 }}>
@@ -103,6 +136,26 @@ export default function NotificationsPanel() {
           </div>
         </div>
         <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          {pushState.supported && !pushState.enabled && pushState.permission !== 'denied' && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/notification-settings') }}
+              style={{
+                border:'1px solid var(--border)', background:'var(--bg3)', color:'var(--text2)',
+                borderRadius:999, padding:'5px 8px', fontSize:10, cursor:'pointer',
+              }}
+            >{rl('Разрешить','Allow')}</button>
+          )}
+          {pushState.permission === 'denied' && (
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); navigate('/notification-settings') }}
+              style={{
+                border:'1px solid rgba(248,113,113,0.35)', background:'rgba(248,113,113,0.08)', color:'#f87171',
+                borderRadius:999, padding:'5px 8px', fontSize:10, cursor:'pointer',
+              }}
+            >{rl('Настройки','Settings')}</button>
+          )}
           {hasUnread && (
             <div style={{
               minWidth:22, height:22, borderRadius:11, background:'var(--accent)',
@@ -113,12 +166,19 @@ export default function NotificationsPanel() {
           <span style={{ color:'var(--text3)', fontSize:14, transition:'transform 0.2s',
             transform:panelOpen?'rotate(180deg)':'none' }}>▼</span>
         </div>
-      </button>
+      </div>
 
       {/* Список уведомлений */}
       {panelOpen && (
         <div style={{ marginTop:6, display:'flex', flexDirection:'column', gap:4 }}>
           {/* Шапка с кнопкой "Очистить всё" */}
+          {pushError && (
+            <div style={{ fontSize:11, color:'#fb7185', padding:'8px 10px', border:'1px solid rgba(251,113,133,0.25)', borderRadius:10, background:'rgba(251,113,133,0.06)' }}>
+              {pushError.includes('Missing VITE_VAPID_PUBLIC_KEY')
+                ? rl('Не задан VITE_VAPID_PUBLIC_KEY в Netlify. Push не сможет подписаться.', 'VITE_VAPID_PUBLIC_KEY is missing in Netlify. Push cannot subscribe.')
+                : pushError}
+            </div>
+          )}
           {notifications.length > 0 && (
             <div style={{ display:'flex', justifyContent:'flex-end', marginBottom:2 }}>
               <button onClick={dismissAll} style={{

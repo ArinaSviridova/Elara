@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { useStyle } from '../context/StyleContext'
 import { useRl } from '../context/LangContext'
 import { useSearchParams } from 'react-router-dom'
+import { scheduleMedicationReminders } from '../lib/scheduledNotifications'
 import { isPregnancyPlanningActive, loadPregnancyToggles, savePregnancyToggles, pregnancyPlanningItems, togglePregnancyItemStatus, loadPregnancyDrafts, removePregnancyDraft } from '../lib/pregnancyPlanningUi'
 
 const EMERGENCY_MEDS = {
@@ -323,10 +324,13 @@ export default function MedicationsPage() {
   }
 
   async function scheduleNotification(med) {
-    if (!('Notification' in window)) return
-    const perm = await Notification.requestPermission()
-    if (perm !== 'granted') return
-    alert(rl(`Напоминание: ${med.times?.join(', ')}`, `Reminder: ${med.times?.join(', ')}`))
+    if (!user?.id) return
+    const result = await scheduleMedicationReminders({ userId:user.id, med, lang: navigator.language?.startsWith('en') ? 'en' : 'ru', daysAhead: 7 })
+    if (result.ok) {
+      alert(rl(`Напоминания включены на 7 дней: ${result.count}`, `Reminders scheduled for 7 days: ${result.count}`))
+    } else {
+      alert(rl(`Не удалось поставить напоминание: ${result.error || 'ошибка'}`, `Could not schedule reminder: ${result.error || 'error'}`))
+    }
   }
 
   function statusLabel(med) {

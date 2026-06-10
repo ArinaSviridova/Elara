@@ -2,6 +2,8 @@ export const PLAN_TYPES = [
   { key:'spa', emoji:'🛁', ru:'СПА / баня / бассейн', en:'Spa / sauna / pool', load:'low', needsEnergy:2, needsSocial:2, avoidPeriod:true, avoidPms:true, avoidHighPain:true, calmOk:true },
   { key:'party', emoji:'🪩', ru:'Вечеринка / бар', en:'Party / bar', load:'high', needsEnergy:4, needsSocial:4, avoidPeriod:false, avoidPms:true, avoidHighPain:true },
   { key:'walk', emoji:'🚶', ru:'Прогулка', en:'Walk', load:'medium', needsEnergy:2, needsSocial:2, avoidPeriod:false, avoidPms:false, avoidHighPain:true },
+  { key:'cooking', emoji:'🍳', ru:'Совместная готовка', en:'Cooking together', load:'low', needsEnergy:1, needsSocial:2, avoidPeriod:false, avoidPms:false, avoidHighPain:false, calmOk:true },
+  { key:'home_date', emoji:'🏠', ru:'Домашний досуг', en:'Home hangout', load:'low', needsEnergy:1, needsSocial:1, avoidPeriod:false, avoidPms:false, avoidHighPain:false, calmOk:true },
   { key:'cafe', emoji:'☕', ru:'Кафе / ужин', en:'Cafe / dinner', load:'low', needsEnergy:2, needsSocial:2, avoidPeriod:false, avoidPms:false, avoidHighPain:false, calmOk:true },
   { key:'sport', emoji:'🏃', ru:'Спорт / активность', en:'Sport / activity', load:'high', needsEnergy:4, needsSocial:3, avoidPeriod:false, avoidPms:true, avoidHighPain:true, avoidHeavyFlow:true },
   { key:'trip', emoji:'🚗', ru:'Поездка / выезд', en:'Trip', load:'high', needsEnergy:4, needsSocial:3, avoidPeriod:true, avoidPms:true, avoidHighPain:true },
@@ -203,6 +205,8 @@ export function adviceForScore(scoreInfo, planKey, lang = 'ru') {
   const plan = PLAN_TYPES.find(p => p.key === planKey) || PLAN_TYPES[0]
   const stats = scoreInfo?.stats
 
+  if (plan.key === 'cooking' && scoreInfo.level !== 'bad') return rl(`Хорошее окно для совместной готовки: низкая нагрузка, можно учесть ресурс группы и приготовить что-то простое.`, `Good window for cooking together: low load, easy to match the group capacity and keep it simple.`)
+  if (plan.key === 'home_date' && scoreInfo.level !== 'bad') return rl(`Лучше домашний формат: еда, фильм, настолка или спокойный разговор без лишней нагрузки.`, `Home format fits: food, movie, board game or calm conversation without overload.`)
   if (scoreInfo.level === 'good') return rl(`Хорошее окно для “${plan.ru}”.`, `Good window for “${plan.en}”.`)
   if (scoreInfo.level === 'ok') return rl(`Можно, но лучше без перегруза: “${plan.ru}”.`, `Possible, but keep it gentle: “${plan.en}”.`)
   if (scoreInfo.reasons?.includes('many_period')) return rl('У многих месячные, лучше спокойный формат или забота.', 'Many are on period, choose a calm plan or care.')

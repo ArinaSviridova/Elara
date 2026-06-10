@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
+import { Notifs } from '../lib/useNotifications'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
 import { PLAN_TYPES, groupScoreForDate, adviceForScore, labelForStatus, rankedPlansForStates } from '../lib/socialPlanning'
@@ -90,32 +91,23 @@ async function sendActivityProposal({ fromUserId, fromName, recipientId, date, a
     ? `${fromName || 'Someone'} suggests “${clean}” on ${readableDate}`
     : `${fromName || 'Кто-то'} предлагает: “${clean}” ${readableDate}`
 
-  await supabase.from('push_invites').insert({
+  const { data: invite } = await supabase.from('push_invites').insert({
     from_user_id: fromUserId,
     to_user_id: recipientId,
     activity_type: message,
     dice_result: null,
     status: 'pending',
     created_at: new Date().toISOString(),
-  })
+  }).select('id').single()
 
   try {
     await supabase.functions.invoke('ai-advisor', {
       body: { requestType:'activity_invite', userId:fromUserId, targetUserIds:[recipientId], date, activityType:clean, note:message, language:lang }
     })
-    // Создаём уведомление
+    // Создаём in-app уведомление и системный Web Push, если получатель разрешил push в PWA
     const { data: sender } = await supabase.from('profiles').select('name').eq('id', fromUserId).single()
     const senderName = sender?.name || 'Кто-то'
-    await supabase.from('app_notifications').insert({
-      user_id: recipientId,
-      type: 'activity_invite',
-      title: `${senderName} предлагает: ${clean}`,
-      body: 'Нажми «Перейти» чтобы ответить',
-      emoji: '📅',
-      source_type: 'sync',
-      action_url: '/sync',
-      priority: 'normal',
-    })
+    await Notifs.activityInvite(recipientId, senderName, clean, invite?.id || null, `/sync?person=${recipientId}&date=${date}`)
   } catch {}
   return true
 }

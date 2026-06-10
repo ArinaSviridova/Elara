@@ -25,6 +25,7 @@ export default defineConfig({
         ],
       },
       workbox: {
+        importScripts: ['/push-listeners.js'],
         cleanupOutdatedCaches: true,
         navigateFallback: '/index.html',
         globPatterns: ['**/*.{js,css,html,ico,png,svg,webp,avif,json}'],

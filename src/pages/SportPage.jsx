@@ -175,13 +175,65 @@ function saveLocalSportLog(userId, date, payload) {
   localStorage.setItem(sportLocalKey(userId, date), JSON.stringify(payload))
 }
 
+function localSportHistoryKey(userId) {
+  return `elara_sport_logs_${userId}`
+}
+
+function readLocalSportHistory(userId) {
+  try { return JSON.parse(localStorage.getItem(localSportHistoryKey(userId)) || '[]') } catch { return [] }
+}
+
+function saveLocalSportHistory(userId, rows) {
+  localStorage.setItem(localSportHistoryKey(userId), JSON.stringify(rows))
+}
+
+function normalizeSportRows(rows = []) {
+  return rows
+    .filter(r => r?.date && Array.isArray(r.workouts))
+    .map(r => ({ ...r, workouts: r.workouts || [], supplements: r.supplements || [] }))
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)))
+}
+
+function todayKey() {
+  const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function dateKeyOffset(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function formatDateLabel(date, lang) {
+  try { return new Date(`${date}T00:00:00`).toLocaleDateString(lang === 'en' ? 'en-US' : 'ru-RU', { day:'2-digit', month:'short' }) } catch { return date }
+}
+
+function workoutLabel(key, lang) {
+  const item = WORKOUT_CATEGORIES.flatMap(cat => cat.items).find(w => w.key === key)
+  return item ? `${item.emoji} ${lang === 'en' ? item.en : item.ru}` : key
+}
+
+function supplementLabel(key, lang) {
+  const item = SUPPLEMENT_CATEGORIES.flatMap(cat => cat.items).find(s => s.key === key)
+  return item ? `${item.emoji} ${lang === 'en' ? item.en : item.ru}` : key
+}
+
 
 export default function SportPage() {
   const { user, profile } = useAuth()
   const { lang } = useLang()
   const rl = useRl()
-  const today = new Date().toISOString().slice(0,10)
+  const today = todayKey()
 
+  const [selectedDate, setSelectedDate] = useState(today)
+  const [historyRows, setHistoryRows] = useState([])
   const [workoutSearch, setWorkoutSearch] = useState('')
   const [suppSearch, setSuppSearch] = useState('')
   const [workouts, setWorkouts] = useState([])
@@ -198,17 +250,21 @@ export default function SportPage() {
   const isMale = ['male','trans_male'].includes(profile?.gender) || ['no_period','menopause'].includes(profile?.body_mode)
 
   useEffect(() => {
-    if (user?.id) loadTodayLog()
-  }, [user?.id])
+    if (user?.id) {
+      loadSelectedLog(selectedDate)
+      loadHistory()
+    }
+  }, [user?.id, selectedDate])
 
-  async function loadTodayLog() {
-    if (!user?.id) return
+  async function loadSelectedLog(date) {
+    if (!user?.id || !date) return
 
-    const localLog = readLocalSportLog(user.id, today)
+    clearForm()
+    const localLog = readLocalSportLog(user.id, date)
     if (localLog) applySportLog(localLog)
 
     const { data, error } = await supabase
-      .from('sport_logs').select('*').eq('user_id', user.id).eq('date', today).maybeSingle()
+      .from('sport_logs').select('*').eq('user_id', user.id).eq('date', date).maybeSingle()
     if (error) {
       console.warn('Sport logs fallback to localStorage:', error)
       setDbUnavailable(true)
@@ -217,8 +273,41 @@ export default function SportPage() {
     setDbUnavailable(false)
     if (data) {
       applySportLog(data)
-      saveLocalSportLog(user.id, today, data)
+      saveLocalSportLog(user.id, date, data)
     }
+  }
+
+  async function loadHistory() {
+    if (!user?.id) return
+    const localRows = readLocalSportHistory(user.id)
+    setHistoryRows(localRows)
+
+    const { data, error } = await supabase
+      .from('sport_logs')
+      .select('date,workouts,supplements,intensity,duration,notes,custom_workout,updated_at,created_at')
+      .eq('user_id', user.id)
+      .order('date', { ascending:false })
+      .limit(60)
+
+    if (error) {
+      console.warn('Sport history fallback to localStorage:', error)
+      setDbUnavailable(true)
+      return
+    }
+
+    const normalized = normalizeSportRows(data || [])
+    setHistoryRows(normalized)
+    saveLocalSportHistory(user.id, normalized)
+    setDbUnavailable(false)
+  }
+
+  function clearForm() {
+    setWorkouts([])
+    setSupplements([])
+    setIntensity('moderate')
+    setDuration(30)
+    setNotes('')
+    setCustomWorkout('')
   }
 
   function applySportLog(data) {
@@ -238,16 +327,20 @@ export default function SportPage() {
 
     const payload = {
       user_id: user.id,
-      date: today,
+      date: selectedDate,
       workouts,
       supplements,
       intensity,
       duration,
       notes,
       custom_workout: customWorkout,
+      updated_at: new Date().toISOString(),
     }
 
-    saveLocalSportLog(user.id, today, payload)
+    saveLocalSportLog(user.id, selectedDate, payload)
+    const nextHistory = normalizeSportRows([...(historyRows || []).filter(r => r.date !== selectedDate), payload])
+    setHistoryRows(nextHistory)
+    saveLocalSportHistory(user.id, nextHistory)
 
     const { error } = await supabase.from('sport_logs').upsert(payload, { onConflict: 'user_id,date' })
 
@@ -259,6 +352,7 @@ export default function SportPage() {
     } else {
       setDbUnavailable(false)
       notifyCircleChange({ userId:user.id, profile, changeType:'sport', details:payload, lang, actionUrl:'/sport' }).catch(()=>{})
+      loadHistory().catch(()=>{})
     }
 
     setSaved(true)
@@ -271,13 +365,36 @@ export default function SportPage() {
 
 
   // AI контекст для спортивных рекомендаций
-  const sportContext = workouts.length > 0 ? `Тренировки сегодня: ${workouts.join(', ')}, интенсивность: ${intensity}` : null
+  const sportContext = workouts.length > 0
+    ? `Selected date sport (${selectedDate}): ${workouts.join(', ')}, intensity: ${intensity}, duration: ${duration} min, supplements: ${supplements.join(', ') || 'none'}, notes: ${notes || 'none'}`
+    : `Selected date ${selectedDate}: no sport logged yet.`
 
   return (
     <div className="page-enter" style={{ flex:1, display:'flex', flexDirection:'column', padding:'20px 16px', gap:14, overflowY:'auto' }}>
       <h2 style={{ fontSize:26 }}>
-        {isMale ? '💪' : '🏃'} {rl('Активность сегодня','Today\'s activity')}
+        {isMale ? '💪' : '🏃'} {rl('Активность и история','Activity & history')}
       </h2>
+
+      <div className="card" style={{ padding:'14px', display:'flex', flexDirection:'column', gap:10 }}>
+        <label style={{ display:'flex', flexDirection:'column', gap:5, fontSize:11, color:'var(--text3)' }}>
+          {rl('Дата тренировки', 'Workout date')}
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+        </label>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          <button type="button" onClick={() => setSelectedDate(dateKeyOffset(0))} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12 }}>
+            {rl('Сегодня','Today')}
+          </button>
+          <button type="button" onClick={() => setSelectedDate(dateKeyOffset(-1))} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12 }}>
+            {rl('Вчера','Yesterday')}
+          </button>
+          <button type="button" onClick={clearForm} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12 }}>
+            {rl('Очистить форму','Clear form')}
+          </button>
+        </div>
+        <div style={{ fontSize:11, color:'var(--text3)', lineHeight:1.45 }}>
+          {rl('Можно записать тренировку за сегодня или задним числом. Каждая дата сохранится отдельно и попадёт в будущие AI-советы.', 'You can log today or a past workout. Each date is saved separately and will be used in future AI advice.')}
+        </div>
+      </div>
 
       {/* Тип тренировки */}
       <div className="card" style={{ padding:'14px' }}>
@@ -430,6 +547,41 @@ export default function SportPage() {
           {rl('Тренировка сохранена локально. Для синхронизации между устройствами добавь таблицу sport_logs из SQL-миграции.', 'Workout saved locally. Add sport_logs from the SQL migration for cross-device sync.')}
         </div>
       )}
+
+      <div className="card" style={{ padding:'14px' }}>
+        <div style={{ display:'flex', justifyContent:'space-between', gap:10, alignItems:'center', marginBottom:10 }}>
+          <div style={{ fontSize:13, fontWeight:700 }}>🧾 {rl('История тренировок', 'Workout history')}</div>
+          <button type="button" onClick={loadHistory} className="btn btn-ghost" style={{ width:'auto', padding:'6px 9px', fontSize:11 }}>↻</button>
+        </div>
+        {historyRows.length === 0 ? (
+          <div style={{ fontSize:12, color:'var(--text3)', lineHeight:1.5 }}>
+            {rl('Пока нет записей. Сохрани тренировку - и она появится здесь по дате.', 'No entries yet. Save a workout and it will appear here by date.')}
+          </div>
+        ) : (
+          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
+            {[...historyRows].sort((a,b)=>String(b.date).localeCompare(String(a.date))).slice(0, 30).map(row => (
+              <button key={row.date} type="button" onClick={() => setSelectedDate(row.date)}
+                style={{ width:'100%', padding:'10px 11px', borderRadius:12, border:`1px solid ${row.date === selectedDate ? 'var(--accent)' : 'var(--border)'}`, background:row.date === selectedDate ? 'var(--accent-soft)' : 'var(--bg2)', color:'var(--text)', textAlign:'left', cursor:'pointer' }}>
+                <div style={{ display:'flex', justifyContent:'space-between', gap:8, alignItems:'center' }}>
+                  <div style={{ fontSize:13, fontWeight:650 }}>{formatDateLabel(row.date, lang)}</div>
+                  <div style={{ fontSize:11, color:'var(--text3)' }}>{row.duration || 0} {rl('мин','min')} · {rl(row.intensity === 'light' ? 'лёгкая' : row.intensity === 'intense' ? 'интенсивная' : 'средняя', row.intensity || 'moderate')}</div>
+                </div>
+                <div style={{ fontSize:12, color:'var(--text2)', marginTop:5, lineHeight:1.45 }}>
+                  {(row.workouts || []).length
+                    ? (row.workouts || []).slice(0, 5).map(k => workoutLabel(k, lang)).join(', ')
+                    : rl('Активности не выбраны', 'No activities selected')}
+                  {row.custom_workout ? ` · ${row.custom_workout}` : ''}
+                </div>
+                {(row.supplements || []).length > 0 && (
+                  <div style={{ fontSize:10, color:'var(--text3)', marginTop:4 }}>
+                    {rl('Добавки:', 'Supplements:')} {(row.supplements || []).slice(0, 5).map(k => supplementLabel(k, lang)).join(', ')}
+                  </div>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Научная база */}
       <div style={{ padding:'12px 14px', background:'var(--bg2)', borderRadius:10, border:'1px solid var(--border)', fontSize:11, color:'var(--text3)', lineHeight:1.7 }}>

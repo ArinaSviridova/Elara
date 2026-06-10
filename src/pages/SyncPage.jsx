@@ -54,14 +54,17 @@ async function sendActivityProposal({ fromUserId, fromName, recipients, date, ac
     ? `${fromName || 'Someone'} suggests “${clean}” on ${readableDate}`
     : `${fromName || 'Кто-то'} предлагает: “${clean}” ${readableDate}`
 
-  await Promise.all(recipients.map(id => supabase.from('push_invites').insert({
-    from_user_id: fromUserId,
-    to_user_id: id,
-    activity_type: message,
-    dice_result: null,
-    status: 'pending',
-    created_at: new Date().toISOString(),
-  }).then(() => true).catch(() => false)))
+  const inviteRows = await Promise.all(recipients.map(async id => {
+    const { data } = await supabase.from('push_invites').insert({
+      from_user_id: fromUserId,
+      to_user_id: id,
+      activity_type: message,
+      dice_result: null,
+      status: 'pending',
+      created_at: new Date().toISOString(),
+    }).select('id').single()
+    return { userId:id, inviteId:data?.id || null }
+  }))
 
   try {
     await supabase.functions.invoke('ai-advisor', {
@@ -80,8 +83,8 @@ async function sendActivityProposal({ fromUserId, fromName, recipients, date, ac
   try {
     const { data: sender } = await supabase.from('profiles').select('name').eq('id', fromUserId).single()
     const senderName = sender?.name || 'Кто-то'
-    await Promise.all(recipients.map(rid =>
-      Notifs.activityInvite(rid, senderName, clean, null)
+    await Promise.all(inviteRows.map(row =>
+      Notifs.activityInvite(row.userId, senderName, clean, row.inviteId, `/sync?date=${date}`)
     ))
   } catch {}
   return true
@@ -412,9 +415,23 @@ export default function SyncPage() {
 
     const normalizedGroups = []
     ;(ownedGroups || []).forEach(g => normalizedGroups.push({ ...g, isOwner:true, members:g.members || [] }))
+
+    const memberGroupIds = (myMemberships || []).map(row => row.group_id).filter(Boolean)
+    let peerMembersByGroup = {}
+    if (memberGroupIds.length) {
+      const { data: peerMembers } = await supabase
+        .from('group_members')
+        .select('*, user:user_id(id, name, avatar_color, body_mode)')
+        .in('group_id', memberGroupIds)
+      ;(peerMembers || []).forEach(m => {
+        if (!peerMembersByGroup[m.group_id]) peerMembersByGroup[m.group_id] = []
+        peerMembersByGroup[m.group_id].push(m)
+      })
+    }
+
     ;(myMemberships || []).forEach(row => {
       if (!row.group || normalizedGroups.some(g => g.id === row.group_id)) return
-      normalizedGroups.push({ ...row.group, isOwner:false, members:[], myMembership:row })
+      normalizedGroups.push({ ...row.group, isOwner:false, members:peerMembersByGroup[row.group_id] || [], myMembership:row })
     })
     setGroups(normalizedGroups)
 
@@ -433,7 +450,7 @@ export default function SyncPage() {
     }
 
     ;(friendships || []).forEach(f => addContact({ user_id:f.friend_id, name:f.friend?.name, color:f.friend_color, relation_type:f.relation_type || 'friend', legacyCalendarAccess:!!f.is_visible }))
-    ;(ownedGroups || []).forEach(g => (g.members || []).forEach(m => addContact({ user_id:m.user_id, name:m.user?.name, color:m.member_color, relation_type:m.relation_type || 'friend', groups:[g.id], legacyCalendarAccess:!!m.can_see_calendar })))
+    ;(normalizedGroups || []).forEach(g => (g.members || []).forEach(m => addContact({ user_id:m.user_id, name:m.user?.name, color:m.member_color, relation_type:m.relation_type || 'friend', groups:[g.id], legacyCalendarAccess:!!m.can_see_calendar })))
     ;(myMemberships || []).forEach(m => {
       if (m.group?.owner_id) addContact({ user_id:m.group.owner_id, name:m.group.owner?.name, color:m.member_color, relation_type:m.relation_type || 'friend', groups:[m.group_id], legacyCalendarAccess:!!m.can_see_calendar })
     })

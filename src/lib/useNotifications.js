@@ -1,6 +1,7 @@
 // Хук управления уведомлениями + утилита создания
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabase'
+import { sendBrowserPushForNotification } from './pushNotifications'
 
 // ── Создать уведомление ──────────────────────────────────────────────────────
 export async function createNotification(userId, {
@@ -12,22 +13,29 @@ export async function createNotification(userId, {
   sourceId = null,
   actionUrl = null,
   priority = 'normal',
+  data: extraData = {},
 }) {
   if (!userId) return
-  const { error } = await supabase.from('app_notifications').insert({
+  const { data, error } = await supabase.from('app_notifications').insert({
     user_id: userId,
     type, title, body, emoji,
     source_type: sourceType,
     source_id: sourceId,
     action_url: actionUrl,
     priority,
-  })
-  if (error) console.error('createNotification error:', error)
+    data: extraData,
+  }).select('id').single()
+  if (error) {
+    console.error('createNotification error:', error)
+    return null
+  }
+  await sendBrowserPushForNotification(data?.id)
+  return data?.id
 }
 
 // ── Шаблоны уведомлений ──────────────────────────────────────────────────────
 export const Notifs = {
-  activityInvite: (userId, fromName, activityText, inviteId) =>
+  activityInvite: (userId, fromName, activityText, inviteId, actionUrl = '/sync') =>
     createNotification(userId, {
       type: 'activity_invite',
       title: `${fromName} предлагает: ${activityText}`,
@@ -35,7 +43,7 @@ export const Notifs = {
       emoji: '📅',
       sourceType: 'sync',
       sourceId: inviteId,
-      actionUrl: '/sync',
+      actionUrl,
       priority: 'normal',
     }),
 

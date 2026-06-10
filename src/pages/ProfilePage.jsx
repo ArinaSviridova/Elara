@@ -533,6 +533,9 @@ export default function ProfilePage() {
         <button className="btn btn-ghost" onClick={() => navigate('/appearance')} style={{ justifyContent:'flex-start', gap:10 }}>
           🎨 {lang==='en'?'Appearance':'Оформление'}
         </button>
+        <button className="btn btn-ghost" onClick={() => navigate('/notification-settings')} style={{ justifyContent:'flex-start', gap:10 }}>
+          🔔 {lang==='en'?'Notifications':'Уведомления'}
+        </button>
         <button className="btn btn-ghost" onClick={() => navigate('/modules')} style={{ justifyContent:'flex-start', gap:10 }}>
           ⚙️ {lang==='en'?'What to track':'Что отслеживать'}
         </button>

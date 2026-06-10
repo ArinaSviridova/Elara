@@ -279,11 +279,16 @@ export default function HealthPage() {
     <div className="page-enter" style={{ flex:1, display:'flex', flexDirection:'column', overflowY:'auto' }}>
       {/* Шапка */}
       <div style={{ padding:'20px 16px 0', background:'var(--bg2)', borderBottom:'1px solid var(--border)' }}>
-        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom:12 }}>
+        <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8, marginBottom:12 }}>
           <h2 style={{ fontSize:26 }}>🩺 {rl('Здоровье','Health')}</h2>
-          <button onClick={() => navigate('/medications')} className="btn btn-ghost" style={{ width:'auto', padding:'6px 12px', fontSize:12 }}>
-            💊 {rl('Таблетки','Meds')}
-          </button>
+          <div style={{ display:'flex', gap:8, flexWrap:'wrap', justifyContent:'flex-end' }}>
+            <button onClick={() => navigate('/weight')} className="btn btn-ghost" style={{ width:'auto', padding:'6px 12px', fontSize:12 }}>
+              ⚖️ {rl('Вес','Weight')}
+            </button>
+            <button onClick={() => navigate('/medications')} className="btn btn-ghost" style={{ width:'auto', padding:'6px 12px', fontSize:12 }}>
+              💊 {rl('Таблетки','Meds')}
+            </button>
+          </div>
         </div>
         <div style={{ display:'flex', gap:0, overflowX:'auto' }}>
           {TABS.map(tb => (
@@ -395,7 +400,7 @@ export default function HealthPage() {
                   <input type="number" placeholder="165" value={height} onChange={e => setHeight(e.target.value)} />
                 </div>
                 <div>
-                  <div style={{ fontSize:11, color:'var(--text3)', marginBottom:5 }}>{rl('Вес (кг)','Weight (kg)')}</div>
+                  <div style={{ fontSize:11, color:'var(--text3)', marginBottom:5 }}>{rl('Вес в профиле (кг)','Profile weight (kg)')}</div>
                   <input type="number" placeholder="60" step="0.1" value={weight} onChange={e => setWeight(e.target.value)} />
                 </div>
               </div>
@@ -404,6 +409,20 @@ export default function HealthPage() {
                   ИМТ: <strong style={{ color:'var(--accent)' }}>{bmi}</strong> — {bmiLabel}
                 </div>
               )}
+              <button type="button" onClick={() => navigate('/weight')}
+                style={{ width:'100%', marginTop:12, padding:'13px 14px', borderRadius:14, cursor:'pointer',
+                  display:'flex', alignItems:'center', gap:12, textAlign:'left',
+                  background:'linear-gradient(135deg, rgba(96,165,250,0.13), rgba(167,139,250,0.09))',
+                  border:'1px solid rgba(96,165,250,0.28)', color:'var(--text)' }}>
+                <span style={{ fontSize:22 }}>📈</span>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontSize:14, fontWeight:700 }}>{rl('График веса','Weight chart')}</div>
+                  <div style={{ fontSize:11, color:'var(--text3)', marginTop:2 }}>
+                    {rl('Ввод за сегодня или прошлые дни, история и динамика','Log today or previous days, history and trend')}
+                  </div>
+                </div>
+                <span style={{ color:'rgba(96,165,250,0.85)', fontSize:18 }}>›</span>
+              </button>
             </div>
 
             <div className="card" style={{ padding:'14px' }}>

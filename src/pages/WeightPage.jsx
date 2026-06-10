@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../context/AuthContext'
 import { useLang, useRl } from '../context/LangContext'
@@ -6,6 +7,15 @@ import { notifyCircleChange } from '../lib/socialNotifications'
 
 function todayKey() {
   const d = new Date()
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function dateKeyOffset(days) {
+  const d = new Date()
+  d.setDate(d.getDate() + days)
   const y = d.getFullYear()
   const m = String(d.getMonth() + 1).padStart(2, '0')
   const day = String(d.getDate()).padStart(2, '0')
@@ -87,6 +97,7 @@ function WeightChart({ rows, rl }) {
 }
 
 export default function WeightPage() {
+  const navigate = useNavigate()
   const { user, profile } = useAuth()
   const { lang } = useLang()
   const rl = useRl()
@@ -157,9 +168,14 @@ export default function WeightPage() {
 
   return (
     <div className="page-enter" style={{ flex:1, display:'flex', flexDirection:'column', padding:'20px 16px', gap:14, overflowY:'auto' }}>
-      <h2 style={{ fontSize:26 }}>⚖️ {rl('Вес', 'Weight')}</h2>
+      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:10 }}>
+        <h2 style={{ fontSize:26 }}>⚖️ {rl('Вес и график', 'Weight & chart')}</h2>
+        <button type="button" onClick={() => navigate('/health')} className="btn btn-ghost" style={{ width:'auto', padding:'7px 11px', fontSize:12 }}>
+          ← {rl('Здоровье', 'Health')}
+        </button>
+      </div>
       <p style={{ fontSize:13, color:'var(--text2)', lineHeight:1.55, marginTop:-8 }}>
-        {rl('Вводи вес когда удобно. Elara сохранит историю и покажет динамику без истерики из-за одной цифры.', 'Log weight whenever useful. Elara keeps the history and shows the trend.')}
+        {rl('Вводи вес за сегодня или за любой предыдущий день. Elara сохранит историю и построит график динамики, без Excel-ритуалов на полнолуние.', 'Log weight for today or any previous day. Elara keeps the history and shows the trend.')}
       </p>
 
       <form onSubmit={saveWeight} className="card" style={{ padding:'14px', display:'flex', flexDirection:'column', gap:10 }}>
@@ -173,7 +189,18 @@ export default function WeightPage() {
             <input type="number" step="0.1" min="20" max="350" value={weight} onChange={e => setWeight(e.target.value)} placeholder="62.5" />
           </label>
         </div>
-        <button className="btn btn-primary" disabled={saving || !Number(weight)}>
+        <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
+          <button type="button" onClick={() => setDate(dateKeyOffset(0))} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12 }}>
+            {rl('Сегодня','Today')}
+          </button>
+          <button type="button" onClick={() => setDate(dateKeyOffset(-1))} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12 }}>
+            {rl('Вчера','Yesterday')}
+          </button>
+          <button type="button" onClick={() => setDate('')} className="btn btn-ghost" style={{ width:'auto', padding:'7px 10px', fontSize:12 }}>
+            {rl('Выбрать вручную','Pick manually')}
+          </button>
+        </div>
+        <button className="btn btn-primary" disabled={saving || !Number(weight) || !date}>
           {saved ? '✓' : saving ? '...' : rl('Сохранить вес', 'Save weight')}
         </button>
         {dbUnavailable && (

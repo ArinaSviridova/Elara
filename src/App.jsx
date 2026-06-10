@@ -53,6 +53,7 @@ import FirstAidPage from './pages/FirstAidPage'
 import FirstAidKitPage from './pages/FirstAidKitPage'
 import WeightPage from './pages/WeightPage'
 import NoCycleGuidePage from './pages/NoCycleGuidePage'
+import NotificationSettingsPage from './pages/NotificationSettingsPage'
 
 function TeenGate({ children }) {
   const { profile } = useAuth()
@@ -107,6 +108,7 @@ function AppShell() {
               <Route path="/first-aid-kit" element={<FirstAidKitPage />} />
               <Route path="/weight" element={<WeightPage />} />
               <Route path="/no-cycle-guide" element={<NoCycleGuidePage />} />
+              <Route path="/notification-settings" element={<NotificationSettingsPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/activity-wishlist" element={<ActivityWishlistPage />} />
               <Route path="/about" element={<AboutPage />} />
