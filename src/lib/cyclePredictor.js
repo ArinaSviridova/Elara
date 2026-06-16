@@ -254,7 +254,7 @@ export function detectStmWindow(stmLogs = {}, periodPrediction = null) {
     .map(l => ({
       ...l,
       date: toKey(l.date),
-      temp: l.temperature === '' || l.temperature == null ? null : Number(l.temperature),
+      temp: (l.temperature ?? l.temp) === '' || (l.temperature ?? l.temp) == null ? null : Number(l.temperature ?? l.temp),
     }))
     .filter(l => inRange(l.date, cycleStart, cycleEnd))
     .sort((a, b) => a.date.localeCompare(b.date))

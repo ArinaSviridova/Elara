@@ -434,8 +434,8 @@ Return JSON: {"isCondition": true/false, "normalized": "правильное н�
 
     if (requestType === 'generate_nutrition') {
       const { goal, lifestyle, diet, kcal, includeProducts, excludeProducts, allergies,
-              budget, country, batchCook, servings, withPartner, partnerName,
-              partnerKcal, partnerGoal, language: targetLang } = body
+              budget, country, batchCook, servings, peopleCount, totalRecipePortions, calorieSplit, withPartner, partnerName,
+              partnerKcal, partnerGoal, evidenceRules, evidenceNote, language: targetLang } = body
       const isNutrRu = (targetLang || 'ru') !== 'en'
       const openaiKey = Deno.env.get('OPENAI_API_KEY')
       if (!openaiKey) return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not set' }), { status: 500, headers: cors })
@@ -457,11 +457,23 @@ Return JSON: {"isCondition": true/false, "normalized": "правильное н�
           : `IMPORTANT: Batch cooking. Prepare for ${servings||2} servings. Repeat same dish for ${servings||2} days. Ingredients in RAW/DRY weight × ${servings||2}.`)
         : (isNutrRu ? 'ВАЖНО: Строго 1 порция на приём. Ингредиенты в СЫРОМ/СУХОМ виде.'
           : 'IMPORTANT: Strictly 1 serving each. All ingredients in RAW/DRY weight.')
-      const partnerNote = withPartner && partnerName
-        ? (isNutrRu ? `ПАРТНЁР: ${partnerName}, цель: ${goalMap[partnerGoal]||partnerGoal}. ${partnerKcal?`Ккал партнёра: ~${partnerKcal}.`:''}. Меню для ДВОИХ, продукты на двоих.`
-          : `PARTNER: ${partnerName}, goal: ${partnerGoal}. ${partnerKcal?`Partner kcal: ~${partnerKcal}.`:''} Menu for TWO, ingredients for two.`)
+      const people = withPartner ? 2 : 1
+      const totalPortions = Number(totalRecipePortions) || ((batchCook ? (Number(servings) || 1) : 1) * people)
+      const userDailyKcal = Number(kcal) || 0
+      const partnerDailyKcal = Number(partnerKcal) || 0
+      const totalDailyKcal = userDailyKcal + partnerDailyKcal
+      const userShare = totalDailyKcal > 0 ? Math.round((userDailyKcal / totalDailyKcal) * 100) : 50
+      const partnerShare = totalDailyKcal > 0 ? 100 - userShare : 50
+      const partnerNote = withPartner
+        ? (isNutrRu
+          ? `ПАРТНЁР: ${partnerName || 'партнёр'}, цель: ${goalMap[partnerGoal]||partnerGoal}. Калории пользователя: ${userDailyKcal || 'авто'} ккал/день. ${partnerKcal?`Ккал партнёра: ~${partnerKcal}.`:''} ВАЖНО: меню готовится совместно. Каждый завтрак, обед, ужин и перекус должен быть одним общим блюдом на ДВОИХ. Если калории отличаются, порции должны отличаться: пользователь получает примерно ${userShare}% общего блюда, партнёр ${partnerShare}%. Название блюда одно, но рецепты и список ингредиентов должны считаться суммарно на двоих с распределением "тебе / партнёру / всего". Если включён batch cooking, рецепт должен быть на ${totalPortions} порции: 2 человека × ${servings || 1} дня. Ккал в поле meal.kcal указывай для пользователя, а partner_kcal_per_day - для партнёра.`
+          : `PARTNER: ${partnerName || 'partner'}, goal: ${partnerGoal}. User calories: ${userDailyKcal || 'auto'} kcal/day. ${partnerKcal?`Partner kcal: ~${partnerKcal}.`:''} IMPORTANT: joint cooking. Each breakfast, lunch, dinner and snack should be one shared dish for TWO. If calories differ, portions should differ: user gets about ${userShare}% of the shared dish, partner ${partnerShare}%. Use one meal name, but recipes and grocery quantities must be total for two with a "user / partner / total" split. If batch cooking is enabled, recipe should be for ${totalPortions} servings: 2 people × ${servings || 1} days. meal.kcal should be user per-person kcal, partner_kcal_per_day for partner.`)
         : ''
       const budgetNote = budget ? (isNutrRu ? `Бюджет: ${budget}/нед. Страна: ${country||'не указана'}.` : `Budget: ${budget}/week. Country: ${country||'N/A'}.`) : ''
+      const evidenceBlock = String(evidenceRules || '').trim() || (isNutrRu
+        ? 'Доказательная база: нет одной идеальной диеты для всех; главное - долгосрочная приверженность, реалистичный дефицит/баланс калорий, достаточный белок, овощи, фрукты, цельные продукты и меньше ультра-обработанной еды. Источники: PMID 25182101, 19246357, 31443231, 41599940, 41200142.'
+        : 'Evidence base: there is no single ideal diet for everyone; prioritize long-term adherence, realistic calorie deficit/maintenance, enough protein, vegetables, fruit, whole foods and fewer ultra-processed foods. Sources: PMID 25182101, 19246357, 31443231, 41599940, 41200142.')
+      const evidenceNoteText = String(evidenceNote || '').trim()
       const sysP = isNutrRu
         ? 'Ты профессиональный диетолог. Составляй меню. Отвечай ТОЛЬКО валидным JSON без markdown.'
         : 'You are a dietitian. Create meal plans. Reply ONLY valid JSON, no markdown.'
@@ -476,6 +488,10 @@ ${allergies?(isNutrRu?`Аллергии: ${allergies}`:`Allergies: ${allergies}`
 ${batchNote}
 ${partnerNote}
 ${budgetNote}
+${evidenceBlock}
+${evidenceNoteText ? (isNutrRu ? `Научная логика для выбранных настроек: ${evidenceNoteText}` : `Evidence logic for selected settings: ${evidenceNoteText}`) : ''}
+${isNutrRu?'В tips добавь 3 коротких пункта: 1) почему меню реалистично соблюдать, 2) где белок, 3) как уменьшить ультра-обработанные продукты. Не пиши медицинских обещаний.':'In tips add 3 short points: 1) why this menu is realistic to adhere to, 2) where protein is included, 3) how it reduces ultra-processed foods. No medical promises.'}
+${withPartner ? (isNutrRu ? `ВАЖНО ДЛЯ РЕЖИМА С ПАРТНЁРОМ: не предлагай отдельные блюда для каждого. Меню должно выглядеть как обычное недельное меню, но каждое блюдо подразумевает приготовление на двоих. Если калории разные, это НЕ два разных блюда, а разные размеры порций одного блюда: пользователь ${userShare}%, партнёр ${partnerShare}%.` : `IMPORTANT FOR PARTNER MODE: do not suggest separate meals for each person. The menu should look like a normal weekly plan, but each meal is cooked for two. If calories differ, it is NOT two different meals, but different portion sizes of one shared dish: user ${userShare}%, partner ${partnerShare}%.`) : ''}
 ${isNutrRu?'JSON формат':'JSON format'}: {"title":"...","kcal_per_day":0,"partner_kcal_per_day":0,"protein_g":0,"fat_g":0,"carbs_g":0,"days":[{"day":"${dayNames[0]}","meals":[{"type":"breakfast","name":"...","kcal":0,"time":"8:00"},{"type":"lunch","name":"...","kcal":0,"time":"13:00"},{"type":"dinner","name":"...","kcal":0,"time":"19:00"},{"type":"snack","name":"...","kcal":0,"time":"16:00"}]},{"day":"${dayNames[1]}","meals":[...]},{"day":"${dayNames[2]}","meals":[...]},{"day":"${dayNames[3]}","meals":[...]},{"day":"${dayNames[4]}","meals":[...]},{"day":"${dayNames[5]}","meals":[...]},{"day":"${dayNames[6]}","meals":[...]}],"tips":["...","...","..."]}`
       const oRes = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -496,43 +512,77 @@ ${isNutrRu?'JSON формат':'JSON format'}: {"title":"...","kcal_per_day":0,"
       const mealName = String(body.mealName || '').trim()
       const targetLang = body.language || 'ru'
       const portions = parseInt(body.portions) || 1
+      const peopleCount = parseInt(body.peopleCount) || 1
+      const withPartnerRecipe = Boolean(body.withPartner)
+      const partnerName = String(body.partnerName || '').trim()
+      const userKcal = Number(body.userKcal) || 0
+      const partnerKcal = Number(body.partnerKcal) || 0
+      const totalKcal = userKcal + partnerKcal
+      const userShare = totalKcal > 0 ? Math.round((userKcal / totalKcal) * 100) : 50
+      const partnerShare = totalKcal > 0 ? 100 - userShare : 50
+      const batchDays = parseInt(body.batchDays) || 1
+      const portionMode = String(body.portionMode || '')
+      const evidenceRules = String(body.evidenceRules || '').trim()
+      const evidenceNote = String(body.evidenceNote || '').trim()
       const isRecipeRu = targetLang !== 'en'
       const openaiKey = Deno.env.get('OPENAI_API_KEY')
       if (!openaiKey) return new Response(JSON.stringify({ error: 'OPENAI_API_KEY not set' }), { status: 500, headers: cors })
 
-      const portionNote = portions > 1
-        ? (isRecipeRu ? `на ${portions} порции (batch cooking)` : `for ${portions} servings (batch cooking)`)
-        : (isRecipeRu ? 'на 1 порцию' : 'for 1 serving')
+      const portionNote = withPartnerRecipe
+        ? (isRecipeRu
+          ? `сразу на двоих${batchDays > 1 ? ` и на ${batchDays} дня: всего ${portions} порции` : ': всего 2 порции'}`
+          : `for two people${batchDays > 1 ? ` and ${batchDays} days: ${portions} servings total` : ': 2 servings total'}`)
+        : (portions > 1
+          ? (isRecipeRu ? `на ${portions} порции (batch cooking)` : `for ${portions} servings (batch cooking)`)
+          : (isRecipeRu ? 'на 1 порцию' : 'for 1 serving'))
 
       const sys = isRecipeRu
-        ? `Ты шеф-повар. Пиши подробные рецепты. ВСЕ ингредиенты указывай в граммах в СЫРОМ/СУХОМ виде (до термической обработки). Например: "куриное филе — 150г (сырое)", "гречка — 80г (сухая)".`
-        : `You are a chef. Write detailed recipes. ALL ingredients in RAW/DRY weight (before cooking). Example: "chicken breast — 150g (raw)", "buckwheat — 80g (dry)".`
+        ? `Ты шеф-повар и нутрициологический помощник. Пиши подробные рецепты на русском языке, без markdown-разметки, без ** и без английских заголовков. ВСЕ ингредиенты указывай в граммах в СЫРОМ/СУХОМ виде (до термической обработки). Если рецепт для двоих, сразу считай ОБЩЕЕ количество ингредиентов на двоих и обязательно добавляй распределение порций по калориям: "тебе", "партнёру", "всего". Если калории отличаются, порции не равные. Например: "куриное филе - тебе 135 г, партнёру 195 г, всего 330 г (сырое)". Опирайся на доказательные принципы: долгосрочная приверженность, белок, овощи/фрукты/цельные продукты, меньше ультра-обработанной еды.`
+        : `You are a chef and nutrition assistant. Write detailed recipes in plain text without markdown. ALL ingredients in RAW/DRY weight (before cooking). If cooking for two, calculate TOTAL ingredients for two and always add portion split by calories: "you", "partner", "total". If calories differ, portions are not equal. Example: "chicken breast - you 135 g, partner 195 g, total 330 g (raw)". Use evidence-based principles: adherence, protein, vegetables/fruits/whole foods, less ultra-processed food.`
 
       const prompt = isRecipeRu
-        ? `Напиши подробный рецепт: "${mealName}" — ${portionNote}.
+        ? `Напиши подробный рецепт: "${mealName}" - ${portionNote}.
 
-## Ингредиенты (${portionNote}, всё в сыром/сухом виде):
-- ингредиент — XХг (сырое/сухое)
+${evidenceRules || 'Научная база: нет одной идеальной диеты для всех; важны приверженность, реалистичность, белок, овощи, фрукты, цельные продукты и меньше ультра-обработанной еды. Источники: PMID 25182101, 19246357, 31443231, 41599940, 41200142.'}
+${evidenceNote ? `Учти: ${evidenceNote}` : ''}
 
-## Приготовление:
+Формат без markdown:
+Ингредиенты (${portionNote}, всё в сыром/сухом виде):
+ингредиент - XX г (сырое/сухое${withPartnerRecipe ? ', на двоих' : ''})
+
+${withPartnerRecipe ? `Критично: если это завтрак/обед/ужин с партнёром, ингредиенты должны быть сразу на двоих. Не добавляй вариант "на 1 порцию". Калории: пользователь ${userKcal || 'авто'} ккал/день, партнёр ${partnerKcal || 'авто'} ккал/день. Распределение порций: тебе ${userShare}%, партнёру ${partnerShare}% от общего блюда. Для каждого значимого ингредиента пиши: "тебе X г, партнёру Y г, всего Z г".` : ''}
+
+Приготовление:
 1. Шаг
 2. Шаг
 
-## Время: XX минут
-## Калорийность: ~XXX ккал${portions>1?` (на ${portions} порции)`:''}
-## Советы шефа:`
-        : `Write a detailed recipe for: "${mealName}" — ${portionNote}.
+Научная логика:
+1-2 предложения: почему рецепт подходит под доказательные принципы питания. Не обещай лечение.
 
-## Ingredients (${portionNote}, all raw/dry weight):
-- ingredient — XXg (raw/dry)
+Время: XX минут
+Калорийность: ~XXX ккал всего${withPartnerRecipe ? ` / тебе ~XXX ккал / партнёру ~XXX ккал` : (portions>1?` (на ${portions} порции)`:``)}
+Советы:`
+        : `Write a detailed recipe for: "${mealName}" - ${portionNote}.
 
-## Instructions:
+${evidenceRules || 'Evidence base: no single ideal diet for everyone; prioritize adherence, realistic routine, protein, vegetables, fruit, whole foods and fewer ultra-processed foods. Sources: PMID 25182101, 19246357, 31443231, 41599940, 41200142.'}
+${evidenceNote ? `Consider: ${evidenceNote}` : ''}
+
+Plain text format, no markdown:
+Ingredients (${portionNote}, all raw/dry weight):
+ingredient - XX g (raw/dry${withPartnerRecipe ? ', for two' : ''})
+
+${withPartnerRecipe ? `Critical: if this is a partner meal, ingredients must already be for two people. Do not add a one-serving version. Calories: user ${userKcal || 'auto'} kcal/day, partner ${partnerKcal || 'auto'} kcal/day. Portion split: user ${userShare}%, partner ${partnerShare}% of the shared dish. For each main ingredient write: "you X g, partner Y g, total Z g".` : ''}
+
+Instructions:
 1. Step
 2. Step
 
-## Time: XX minutes
-## Calories: ~XXX kcal${portions>1?` (for ${portions} servings)`:''}
-## Chef tips:`
+Evidence logic:
+1-2 sentences explaining why the recipe follows evidence-based nutrition principles. No treatment promises.
+
+Time: XX minutes
+Calories: ~XXX kcal total${withPartnerRecipe ? ` / you ~XXX kcal / partner ~XXX kcal` : (portions>1?` (for ${portions} servings)`:``)}
+Tips:`
 
       const oRes = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',

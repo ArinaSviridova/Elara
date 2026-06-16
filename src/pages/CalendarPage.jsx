@@ -80,6 +80,119 @@ function datesBetween(start, end) {
   return dates
 }
 
+function dateOnly(value) {
+  const d = value instanceof Date ? new Date(value) : new Date(`${value}T00:00:00`)
+  d.setHours(0, 0, 0, 0)
+  return d
+}
+
+function addDays(value, days) {
+  const d = dateOnly(value)
+  d.setDate(d.getDate() + days)
+  return d
+}
+
+function daysUntil(value) {
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+  return Math.round((dateOnly(value) - today) / 86400000)
+}
+
+function findCurrentOrNextEvent(predictions = [], resolveDate) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const events = []
+
+  for (const p of predictions || []) {
+    const raw = resolveDate(p)
+    if (!raw) continue
+    const date = dateOnly(raw)
+    const days = Math.round((date - today) / 86400000)
+    if (days >= 0 && days <= 120) events.push({ date, days, window:p })
+  }
+
+  return events.sort((a, b) => a.days - b.days)[0] || null
+}
+
+function getStmWindowForPrediction(stmLogs, p) {
+  try { return detectStmWindow(stmLogs || {}, p) } catch { return null }
+}
+
+function getUpcomingPhaseCounters(prediction, stmLogs = {}, stmEnabled = false) {
+  if (!prediction?.predictions?.length) return []
+
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const windows = prediction.predictions || []
+  const currentWindow = windows.find(p => today >= dateOnly(p.cycleStart || p.periodStart) && today <= dateOnly(p.cycleEnd || addDays(p.nextPeriodStart, -1))) || null
+  const currentStm = stmEnabled && currentWindow ? getStmWindowForPrediction(stmLogs, currentWindow) : null
+
+  const periodCurrent = windows.find(p => today >= dateOnly(p.periodStart) && today <= dateOnly(p.periodEnd))
+  const periodEvent = periodCurrent
+    ? { date: dateOnly(periodCurrent.periodStart), days:0, window:periodCurrent }
+    : findCurrentOrNextEvent(windows, p => p.periodStart)
+
+  const pmsCurrent = windows.find(p => today >= dateOnly(p.pmsStart) && today <= dateOnly(p.pmsEnd))
+  const pmsEvent = pmsCurrent
+    ? { date: dateOnly(pmsCurrent.pmsStart), days:0, window:pmsCurrent }
+    : findCurrentOrNextEvent(windows, p => p.pmsStart)
+
+  const ovulationEvent = (() => {
+    if (stmEnabled && currentWindow && currentStm?.peakDay) {
+      const days = daysUntil(currentStm.peakDay)
+      if (days >= -1 && days <= 7) return { date: dateOnly(currentStm.peakDay), days:Math.max(0, days), window:currentWindow, source:'stm', note:'peak' }
+    }
+    return findCurrentOrNextEvent(windows, p => {
+      const stm = stmEnabled ? getStmWindowForPrediction(stmLogs, p) : null
+      return stm?.peakDay || p.ovulation
+    })
+  })()
+
+  const lutealEvent = (() => {
+    if (stmEnabled && currentWindow && currentStm?.fertileEnd) {
+      const date = dateOnly(currentStm.fertileEnd)
+      const days = daysUntil(date)
+      if (days >= 0 && days <= 14) return { date, days, window:currentWindow, source:'stm', note:'temp_mucus' }
+    }
+    return findCurrentOrNextEvent(windows, p => p.lutealStart)
+  })()
+
+  return [
+    { type:'period', ...periodEvent },
+    { type:'ovulation', ...ovulationEvent },
+    { type:'pms', ...pmsEvent },
+    { type:'luteal', ...lutealEvent },
+  ].filter(e => e?.date)
+}
+
+function getStmTodaySignal(stmLogs = {}, todayKey, prediction) {
+  const log = stmLogs?.[todayKey]
+  if (!log) return null
+
+  const mucus = log.mucus
+  const cervix = log.cervix
+  const temp = log.temperature ?? log.temp
+  const fertileMucus = ['watery', 'eggwhite', 'stretchy', 'slippery'].includes(mucus)
+  const transitionMucus = ['sticky', 'creamy'].includes(mucus)
+  const dryMucus = mucus === 'dry'
+  const highSoft = cervix === 'high_soft'
+
+  let window = null
+  if (prediction?.predictions?.length) {
+    const today = dateOnly(todayKey)
+    const current = prediction.predictions.find(p => today >= dateOnly(p.cycleStart || p.periodStart) && today <= dateOnly(p.cycleEnd || addDays(p.nextPeriodStart, -1)))
+    window = current ? getStmWindowForPrediction(stmLogs, current) : null
+  }
+
+  const tempShift = window?.thirdHighDay && dateOnly(todayKey) >= dateOnly(window.thirdHighDay)
+  const peakDay = window?.peakDay && toKey(window.peakDay) === todayKey
+
+  if (peakDay) return { level:'high', emoji:'✨', ru:'Сегодня пик слизи: вероятно окно овуляции по СТМ.', en:'Peak mucus today: likely ovulation window by STM.' }
+  if (fertileMucus || highSoft) return { level:'high', emoji:'🌿', ru:'Сегодня есть фертильные признаки по СТМ: водянистая/тянущаяся слизь или высокая мягкая шейка.', en:'Fertile STM signs today: watery/egg-white mucus or high soft cervix.' }
+  if (tempShift) return { level:'confirmed', emoji:'🌡️', ru:'Температурный подъём подтверждает переход после овуляции. Лютеиновая фаза вероятнее.', en:'Temperature shift supports post-ovulation transition. Luteal phase is more likely.' }
+  if (transitionMucus) return { level:'medium', emoji:'🌱', ru:'Есть переходные признаки: слизь меняется, наблюдай ещё 1-2 дня.', en:'Transitional signs: mucus is changing, keep tracking for 1-2 days.' }
+  if (dryMucus && temp !== '' && temp != null) return { level:'low', emoji:'◌', ru:'Сегодня сухо и есть отметка температуры. По одному дню вывод не делаем, но данные учтены.', en:'Dry day with temperature logged. One day is not enough, but the data is included.' }
+  return { level:'note', emoji:'🌡️', ru:'СТМ-данные за сегодня учтены в подсказках календаря.', en:'Today’s STM data is included in calendar hints.' }
+}
+
 function buildHistoryFromEntries(periodEntries) {
   if (!periodEntries || periodEntries.length === 0) return []
   const sorted = [...periodEntries].sort((a,b) => a.date.localeCompare(b.date))
@@ -420,11 +533,16 @@ function CycleCalendar({ calendarConfig }) {
   const todayKey = toKey(today)
   const selectedKey = selected ? toKey(selected) : null
   const todayMoods = moods[todayKey] || []
+  const stmEnabled = Boolean((calendarConfig?.showStm || healthSettings?.contraception === 'stm') && !calendarConfig?.hideFertilityDetails)
+  const stmLogs = healthSettings?.stm_logs || {}
   const upcomingPhases = showCycle
     ? getUpcomingPhases(prediction).filter(ev => !(calendarConfig?.hideFertilityDetails && ['ovulation', 'fertile'].includes(ev.type)))
     : []
-  const stmEnabled = Boolean((calendarConfig?.showStm || healthSettings?.contraception === 'stm') && !calendarConfig?.hideFertilityDetails)
-  const stmLogs = healthSettings?.stm_logs || {}
+  const phaseCounters = showCycle && prediction
+    ? getUpcomingPhaseCounters(prediction, stmEnabled ? stmLogs : {}, stmEnabled)
+        .filter(ev => !(calendarConfig?.hideFertilityDetails && ['ovulation', 'fertile'].includes(ev.type)))
+    : []
+  const todayStmSignal = showCycle && stmEnabled ? getStmTodaySignal(stmLogs, todayKey, prediction) : null
   const currentPhase = showCycle && prediction ? getDetailedPhaseForDate(today, prediction.predictions, stmEnabled ? stmLogs : {}) : null
   const isInDeleteMode = markMode.startsWith('del-')
   const isPickingDay = markMode !== 'normal'
@@ -582,7 +700,7 @@ function CycleCalendar({ calendarConfig }) {
       {/* Прогноз */}
       {showCycle && prediction && (
         <div style={{ background:'var(--bg2)', borderRadius:14, padding:'14px 16px', border:'1px solid var(--border)' }}>
-          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: upcomingPhases.length > 0 ? 12 : 0 }}>
+          <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', marginBottom: phaseCounters.length > 0 || todayStmSignal ? 12 : 0 }}>
             <div>
               {currentPhase ? (
                 <div style={{ display:'flex', alignItems:'center', gap:8 }}>
@@ -591,6 +709,7 @@ function CycleCalendar({ calendarConfig }) {
                     <div style={{ fontSize:13, color:'var(--text)', fontWeight:500 }}>
                       {rl('Сейчас: ','Now: ')}{phaseLabel(currentPhase.type)}
                       {currentPhase.predicted && <span style={{ fontSize:10, color:'var(--text3)', marginLeft:6 }}>({rl('прогноз','predicted')})</span>}
+                      {currentPhase.source?.includes('stm') && <span style={{ fontSize:10, color:'var(--accent)', marginLeft:6 }}>({rl('СТМ','STM')})</span>}
                     </div>
                   </div>
                 </div>
@@ -608,27 +727,53 @@ function CycleCalendar({ calendarConfig }) {
             </div>
           </div>
 
-          {upcomingPhases.length > 0 && (
-            <div style={{ display:'flex', gap:8 }}>
-              {upcomingPhases.map((ev, i) => (
-                <div key={i} style={{
-                  flex:1, background:'var(--bg3)', borderRadius:10, padding:'10px 8px',
-                  border:`1px solid ${(PHASE_META[ev.type]?.color || activeMeta[ev.type]?.color)}33`, textAlign:'center'
-                }}>
-                  <div style={{ fontSize:16 }}>{PHASE_META[ev.type]?.emoji || activeMeta[ev.type]?.emoji}</div>
-                  <div style={{ fontSize:10, color:'var(--text2)', marginTop:2 }}>{phaseLabel(ev.type)}</div>
-                  {ev.days === 0 ? (
-                    <div style={{ fontSize:11, color:PHASE_META[ev.type]?.color || activeMeta[ev.type]?.color, fontWeight:500 }}>
-                      {rl('Сегодня','Today')}
+          {phaseCounters.length > 0 && (
+            <div>
+              <div style={{ fontSize:11, color:'var(--text3)', textTransform:'uppercase', letterSpacing:'0.06em', marginBottom:8 }}>
+                {rl('Сколько осталось','Countdown')}
+              </div>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(2, minmax(0, 1fr))', gap:8 }}>
+                {phaseCounters.map((ev, i) => {
+                  const color = PHASE_META[ev.type]?.color || activeMeta[ev.type]?.color || 'var(--accent)'
+                  return (
+                    <div key={`${ev.type}-${i}`} style={{
+                      background:'var(--bg3)', borderRadius:12, padding:'10px 9px',
+                      border:`1px solid ${color}33`, textAlign:'left', minHeight:72,
+                    }}>
+                      <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', gap:8 }}>
+                        <div style={{ display:'flex', alignItems:'center', gap:6, minWidth:0 }}>
+                          <span style={{ fontSize:16 }}>{PHASE_META[ev.type]?.emoji || activeMeta[ev.type]?.emoji}</span>
+                          <span style={{ fontSize:10, color:'var(--text2)', overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>{phaseLabel(ev.type)}</span>
+                        </div>
+                        {ev.source === 'stm' && <span style={{ fontSize:9, color:'var(--accent)', whiteSpace:'nowrap' }}>{rl('СТМ','STM')}</span>}
+                      </div>
+                      {ev.days === 0 ? (
+                        <div style={{ marginTop:7, fontSize:13, color, fontWeight:700 }}>
+                          {rl('Сегодня','Today')}
+                        </div>
+                      ) : ev.days === 1 ? (
+                        <div style={{ marginTop:7 }}>
+                          <div style={{ fontSize:16, fontFamily:'Cormorant Garamond, serif', color, lineHeight:1 }}>{rl('Завтра','Tomorrow')}</div>
+                          <div style={{ fontSize:9, color:'var(--text3)', marginTop:3 }}>{formatDate(ev.date)}</div>
+                        </div>
+                      ) : (
+                        <div style={{ marginTop:6 }}>
+                          <span style={{ fontSize:22, fontFamily:'Cormorant Garamond, serif', color, lineHeight:1 }}>{ev.days}</span>
+                          <span style={{ fontSize:10, color:'var(--text3)', marginLeft:4 }}>{rl('дн.','d')}</span>
+                          <div style={{ fontSize:9, color:'var(--text3)', marginTop:2 }}>{formatDate(ev.date)}</div>
+                        </div>
+                      )}
                     </div>
-                  ) : (
-                    <div>
-                      <div style={{ fontSize:18, fontFamily:'Cormorant Garamond, serif', color:PHASE_META[ev.type]?.color || activeMeta[ev.type]?.color, lineHeight:1 }}>{ev.days}</div>
-                      <div style={{ fontSize:9, color:'var(--text3)' }}>{rl('дн','d')} · {formatDate(ev.date)}</div>
-                    </div>
-                  )}
-                </div>
-              ))}
+                  )
+                })}
+              </div>
+            </div>
+          )}
+
+          {todayStmSignal && (
+            <div style={{ marginTop:phaseCounters.length ? 10 : 0, padding:'10px 12px', borderRadius:12, background:'var(--bg3)', border:'1px solid var(--border)', color:'var(--text2)', fontSize:12, lineHeight:1.45 }}>
+              <div style={{ fontWeight:600, color:'var(--text)', marginBottom:3 }}>{todayStmSignal.emoji} {rl('СТМ сегодня','STM today')}</div>
+              {lang === 'en' ? todayStmSignal.en : todayStmSignal.ru}
             </div>
           )}
         </div>
@@ -636,7 +781,20 @@ function CycleCalendar({ calendarConfig }) {
 
       {showCycle && !prediction && (
         <div className="card" style={{ padding:'12px 14px', border:'1px solid var(--border)', color:'var(--text2)', fontSize:12, lineHeight:1.5 }}>
-          🩸 {rl('Добавь хотя бы один день менструации в календаре - после этого Elara снова покажет фазы, овуляцию и ПМС.', 'Add at least one period day in the calendar - then Elara will show phases, ovulation, and PMS again.')}
+          <div style={{ marginBottom:10 }}>
+            🩸 {rl('Добавь хотя бы один день менструации в календаре - после этого Elara снова покажет фазы, овуляцию и ПМС.', 'Add at least one period day in the calendar - then Elara will show phases, ovulation, and PMS again.')}
+          </div>
+          <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:8 }}>
+            <button type="button" onClick={() => markSingleDay('period', todayKey)} style={{ padding:'9px 10px', borderRadius:10, cursor:'pointer', border:'1px solid var(--accent)', background:'var(--accent-soft)', color:'var(--accent)', fontSize:12 }}>
+              {rl('Сегодня день месячных','Today is period day')}
+            </button>
+            <button type="button" onClick={() => markRange(toKey(new Date(Date.now() - 4 * 86400000)), todayKey, 'period')} style={{ padding:'9px 10px', borderRadius:10, cursor:'pointer', border:'1px solid var(--border)', background:'var(--bg3)', color:'var(--text2)', fontSize:12 }}>
+              {rl('Последние 5 дней','Last 5 days')}
+            </button>
+          </div>
+          <div style={{ fontSize:11, color:'var(--text3)', marginTop:8 }}>
+            {rl('Можно также нажать на любой день календаря и отметить один день или диапазон.', 'You can also tap any calendar day and mark one day or a range.')}
+          </div>
         </div>
       )}
 

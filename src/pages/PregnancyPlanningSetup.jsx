@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLang, useRl } from '../context/LangContext'
 import { supabase } from '../lib/supabase'
+import { createNotification } from '../lib/useNotifications'
 import { pregnancyPlanningItems, loadPregnancyToggles, savePregnancyToggles } from '../lib/pregnancyPlanningUi'
 
 const TIMELINE_OPTIONS = [
@@ -220,15 +221,14 @@ export default function PregnancyPlanningSetup() {
 
       try {
         const { data: me } = await supabase.from('profiles').select('name').eq('id', user.id).single()
-        await supabase.from('app_notifications').insert({
-          user_id: selectedPartner.id,
+        await createNotification(selectedPartner.id, {
           type: 'pregnancy_task',
           title: `${me?.name || 'Кто-то'} приглашает к подготовке к беременности`,
           body: 'Нажми «Перейти», чтобы ответить на приглашение',
           emoji: '🌱',
-          source_type: 'pregnancy',
-          source_id: reqData.id,
-          action_url: `/pregnancy-partner-response?request=${reqData.id}`,
+          sourceType: 'pregnancy',
+          sourceId: reqData.id,
+          actionUrl: `/pregnancy-partner-response?request=${reqData.id}`,
           priority: 'high',
         })
       } catch (err) {

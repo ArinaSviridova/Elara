@@ -4,6 +4,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLang, useRl } from '../context/LangContext'
 import { supabase } from '../lib/supabase'
+import { createNotification } from '../lib/useNotifications'
 
 export default function PregnancyPartnerResponsePage() {
   const { user } = useAuth()
@@ -64,8 +65,7 @@ export default function PregnancyPartnerResponsePage() {
 
     // Уведомление отправителю
     const { data: me } = await supabase.from('profiles').select('name').eq('id', user.id).single()
-    await supabase.from('app_notifications').insert({
-      user_id: request.from_user_id,
+    await createNotification(request.from_user_id, {
       type: 'pregnancy_task',
       title: accept
         ? `${me?.name || 'Партнёр'} принял(а) приглашение к подготовке 🌱`
@@ -74,8 +74,8 @@ export default function PregnancyPartnerResponsePage() {
         ? rl('Вы теперь вместе готовитесь к беременности!', 'You are now planning pregnancy together!')
         : rl('Вы всегда можете отправить новое приглашение позже.', 'You can always send a new invitation later.'),
       emoji: accept ? '🌱' : '💙',
-      source_type: 'pregnancy',
-      action_url: '/pregnancy',
+      sourceType: 'pregnancy',
+      actionUrl: '/pregnancy',
       priority: accept ? 'high' : 'normal',
     })
 

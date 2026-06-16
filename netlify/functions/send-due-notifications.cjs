@@ -94,6 +94,33 @@ exports.handler = async () => {
     const result = await sendToUser({ supabase, webpushReady, notification: inserted })
     sent += result.sent || 0
     await supabase.from('scheduled_notifications').update({ status:'sent', notification_id:inserted.id, processed_at:new Date().toISOString() }).eq('id', row.id)
+
+    // Daily reminders are recurring. After sending today's reminder, create the next one.
+    // We keep one pending row per reminderKey, because databases also deserve not to drown.
+    try {
+      const meta = row.data || {}
+      if (meta.recurring === 'daily' && meta.reminderKey && meta.time) {
+        const nextDue = new Date(row.due_at || new Date().toISOString())
+        nextDue.setDate(nextDue.getDate() + 1)
+        const [hh, mm] = String(meta.time).split(':').map(Number)
+        if (!Number.isNaN(hh) && !Number.isNaN(mm)) nextDue.setHours(hh, mm, 0, 0)
+        await supabase.from('scheduled_notifications').insert({
+          user_id: row.user_id,
+          due_at: nextDue.toISOString(),
+          type: row.type,
+          title: row.title,
+          body: row.body,
+          emoji: row.emoji || '🔔',
+          source_type: row.source_type || 'daily_reminders',
+          source_id: row.source_id || meta.reminderKey,
+          action_url: row.action_url || '/',
+          priority: row.priority || 'normal',
+          data: row.data || {},
+          status: 'pending',
+        })
+      }
+    } catch (e) { console.warn('daily reminder reschedule failed', e.message) }
+
     processed += 1
   }
 

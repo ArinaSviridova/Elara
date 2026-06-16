@@ -2,7 +2,9 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
+import { supabase } from '../lib/supabase'
 import { disablePushNotifications, enablePushNotifications, getPushState, isPushSupported } from '../lib/pushNotifications'
+import { defaultDailyReminderSettings, rescheduleDailyReminderSettings } from '../lib/scheduledNotifications'
 
 function detectPlatform() {
   if (typeof navigator === 'undefined') return 'unknown'
@@ -35,6 +37,8 @@ export default function NotificationSettingsPage() {
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [dailyReminders, setDailyReminders] = useState(() => defaultDailyReminderSettings(lang))
+  const [reminderSaving, setReminderSaving] = useState(false)
 
   const isEn = lang === 'en'
   const t = (ru, en) => isEn ? en : ru
@@ -48,7 +52,40 @@ export default function NotificationSettingsPage() {
     }
   }
 
-  useEffect(() => { refresh() }, [user?.id])
+  useEffect(() => { refresh(); loadDailyReminders() }, [user?.id, lang])
+
+  async function loadDailyReminders() {
+    if (!user?.id) return
+    try {
+      const { data } = await supabase.from('profiles').select('health').eq('id', user.id).maybeSingle()
+      const saved = data?.health?.daily_reminders
+      setDailyReminders(saved || defaultDailyReminderSettings(lang))
+    } catch {
+      setDailyReminders(defaultDailyReminderSettings(lang))
+    }
+  }
+
+  function updateDailyReminder(key, patch) {
+    setDailyReminders(prev => ({
+      ...prev,
+      [key]: { ...(prev?.[key] || {}), ...patch },
+      language: lang,
+    }))
+  }
+
+  async function saveDailyReminders() {
+    if (!user?.id || reminderSaving) return
+    setReminderSaving(true); setError(''); setMessage('')
+    try {
+      const result = await rescheduleDailyReminderSettings({ userId:user.id, settings:dailyReminders, lang })
+      if (!result.ok) throw new Error(result.error || 'failed')
+      setMessage(t('Ежедневные напоминания сохранены. Они будут приходить, если push включён на устройстве.', 'Daily reminders saved. They will arrive if push is enabled on this device.'))
+    } catch (e) {
+      setError(e?.message || t('Не удалось сохранить ежедневные напоминания.', 'Could not save daily reminders.'))
+    } finally {
+      setReminderSaving(false)
+    }
+  }
 
   async function handleEnable() {
     if (!user?.id || busy) return
@@ -205,6 +242,41 @@ export default function NotificationSettingsPage() {
         <ol style={{ margin:0, paddingLeft:18, display:'flex', flexDirection:'column', gap:8 }}>
           {guide.steps.map((step, i) => <li key={i} style={{ fontSize:12, color:'var(--text2)', lineHeight:1.55 }}>{step}</li>)}
         </ol>
+      </div>
+
+      <div className="card" style={{ display:'flex', flexDirection:'column', gap:12, border:'1px solid rgba(167,139,250,0.22)', background:'rgba(167,139,250,0.055)' }}>
+        <div>
+          <div style={{ fontSize:15, fontWeight:700 }}>⏰ {t('Ежедневные напоминания', 'Daily reminders')}</div>
+          <div style={{ fontSize:12, color:'var(--text3)', marginTop:4, lineHeight:1.5 }}>
+            {t('Выбери, о чём Elara должна напоминать каждый день. Работает вместе с системным push.', 'Choose what Elara should remind you about every day. Works with system push.')}
+          </div>
+        </div>
+
+        {[
+          { key:'checkin', emoji:'🌙', ru:'Настроение и самочувствие', en:'Mood and wellbeing' },
+          { key:'sport', emoji:'🏃', ru:'Спорт / активность', en:'Sport / activity' },
+          { key:'nutrition', emoji:'🥗', ru:'Питание / меню', en:'Nutrition / meal plan' },
+        ].map(item => {
+          const cfg = dailyReminders?.[item.key] || {}
+          return (
+            <div key={item.key} style={{ display:'grid', gridTemplateColumns:'1fr 92px 52px', gap:8, alignItems:'center', padding:'10px 0', borderTop:'1px solid rgba(255,255,255,0.08)' }}>
+              <div style={{ fontSize:13, color:'var(--text)' }}>{item.emoji} {t(item.ru, item.en)}</div>
+              <input
+                type="time"
+                value={cfg.time || (item.key === 'sport' ? '18:30' : item.key === 'nutrition' ? '10:00' : '09:30')}
+                onChange={e => updateDailyReminder(item.key, { time:e.target.value })}
+                style={{ minWidth:0, padding:'7px 8px', borderRadius:10, border:'1px solid var(--border)', background:'var(--bg2)', color:'var(--text)', fontSize:12 }}
+              />
+              <button type="button" onClick={() => updateDailyReminder(item.key, { enabled:!cfg.enabled })} style={{ width:46, height:26, borderRadius:13, cursor:'pointer', border:'none', padding:0, background:cfg.enabled?'var(--accent)':'var(--bg3)', position:'relative' }}>
+                <span style={{ width:20, height:20, borderRadius:'50%', background:'white', position:'absolute', top:3, left:cfg.enabled?23:3, transition:'left 0.2s' }} />
+              </button>
+            </div>
+          )
+        })}
+
+        <button className="btn btn-primary" onClick={saveDailyReminders} disabled={reminderSaving || !user?.id}>
+          {reminderSaving ? '...' : t('Сохранить ежедневные напоминания', 'Save daily reminders')}
+        </button>
       </div>
 
       <div className="card" style={{ background:'var(--bg2)', border:'1px solid var(--border)' }}>

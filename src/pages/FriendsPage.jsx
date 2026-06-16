@@ -5,6 +5,7 @@ import { PrettyButton } from '../lib/circleCalendar'
 import { useAuth } from '../context/AuthContext'
 import { useTheme } from '../context/ThemeContext'
 import { useLang } from '../context/LangContext'
+import { syncGroupMembers } from '../lib/groupSync'
 
 const RELATION_TYPES = {
   group:       { emoji: '👥', labelRu: 'Группа подруг',    labelEn: 'Group of friends' },
@@ -215,6 +216,7 @@ export default function FriendsPage() {
     setView('main')
     fetchAll()
     if (group) {
+      await syncGroupMembers(group.id)
       setSelectedGroup(group)
       setView('group-detail')
     }
@@ -254,6 +256,7 @@ export default function FriendsPage() {
         await Promise.all((groupPeers || [])
           .filter(peer => peer.user_id && peer.user_id !== user.id)
           .map(peer => ensureFriendship(peer.user_id, peer.relation_type || 'friend', peer.member_color || joinColor)))
+        await syncGroupMembers(group.id)
         setJoinCode(''); setJoinRelation('group'); setView('main'); fetchAll()
       }
       setJoining(false); return
@@ -284,6 +287,7 @@ export default function FriendsPage() {
         await Promise.all((groupPeers || [])
           .filter(peer => peer.user_id && peer.user_id !== user.id)
           .map(peer => ensureFriendship(peer.user_id, peer.relation_type || 'friend', peer.member_color || joinColor)))
+        await syncGroupMembers(group.id)
         setJoinCode(''); setView('main'); fetchAll()
       }
       setJoining(false); return
@@ -345,7 +349,9 @@ export default function FriendsPage() {
   }
 
   async function removeMember(memberId) {
+    const groupId = selectedGroup?.id
     await supabase.from('group_members').delete().eq('id', memberId)
+    if (groupId) await syncGroupMembers(groupId)
     fetchAll()
     if (selectedGroup) {
       const updated = groups.find(g => g.id === selectedGroup.id)
@@ -969,6 +975,8 @@ export default function FriendsPage() {
   }
 
   const circlePrepActive = hasPregnancyPrep(profile)
+  const visibleConnections = individualConnections.filter(f => !excludedFriends.includes(f.friend_id))
+  const hasCirclePeople = groups.length > 0 || visibleConnections.length > 0
 
   // MAIN VIEW
   return (
@@ -980,14 +988,18 @@ export default function FriendsPage() {
             {rl('Люди, группы, доступы и общий календарь без квеста “угадай кнопку”.','People, groups, access and shared calendar without button archaeology.')}
           </p>
         </div>
-        <PrettyButton onClick={() => navigate('/sync')} variant="primary" style={{ whiteSpace:'nowrap' }}>
-          📅 {rl('Общий календарь','Shared calendar')}
-        </PrettyButton>
+        {hasCirclePeople && (
+          <PrettyButton onClick={() => navigate('/sync')} variant="primary" style={{ whiteSpace:'nowrap' }}>
+            📅 {rl('Общий календарь','Shared calendar')}
+          </PrettyButton>
+        )}
       </div>
 
-      <PrettyButton onClick={() => navigate('/sync')} variant="primary" style={{ width:'100%', padding:'15px 16px', fontSize:15 }}>
-        ✨ {rl('Подобрать совместный досуг','Plan shared activity')}
-      </PrettyButton>
+      {hasCirclePeople && (
+        <PrettyButton onClick={() => navigate('/sync')} variant="primary" style={{ width:'100%', padding:'15px 16px', fontSize:15 }}>
+          ✨ {rl('Подобрать совместный досуг','Plan shared activity')}
+        </PrettyButton>
+      )}
 
       {circlePrepActive && (
         <div className="card" style={{ padding:'15px', border:'1px solid rgba(134,239,172,0.28)', background:'linear-gradient(135deg, rgba(74,222,128,0.10), rgba(255,255,255,0.025))' }}>
@@ -1064,7 +1076,7 @@ export default function FriendsPage() {
             {rl('Отдельные','Individual')}
           </div>
           <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            {individualConnections.filter(f => !excludedFriends.includes(f.friend_id)).map(f => (
+            {visibleConnections.map(f => (
               <div key={f.id} className="card" style={{ padding:'12px 14px' }}>
                 <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:10 }}>
                   <div style={{ width:36, height:36, borderRadius:'50%', background:f.friend_color,
@@ -1112,7 +1124,7 @@ export default function FriendsPage() {
         </div>
       )}
 
-      {groups.length === 0 && individualConnections.length === 0 && (
+      {!hasCirclePeople && (
         <div style={{ textAlign:'center', color:'var(--text3)', fontSize:14, padding:'40px 20px', lineHeight:2 }}>
           <div style={{ fontSize:40, marginBottom:12 }}>🌙</div>
           {rl('Твой круг пока пуст','Your circle is empty')}

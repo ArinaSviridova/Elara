@@ -15,16 +15,47 @@ export async function createNotification(userId, {
   priority = 'normal',
   data: extraData = {},
 }) {
-  if (!userId) return
-  const { data, error } = await supabase.from('app_notifications').insert({
+  if (!userId || !title) return null
+
+  const payload = {
     user_id: userId,
-    type, title, body, emoji,
+    type,
+    title,
+    body,
+    emoji,
     source_type: sourceType,
     source_id: sourceId,
-    action_url: actionUrl,
+    action_url: actionUrl || '/',
     priority,
     data: extraData,
-  }).select('id').single()
+  }
+
+  // Production-safe path: Netlify Function uses service_role, so notifications to friends,
+  // partners and group members are not randomly strangled by RLS. Because apparently
+  // “notify another user” is an extreme sport now.
+  try {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      const res = await fetch('/.netlify/functions/create-notification', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify(payload),
+      })
+      if (res.ok) {
+        const json = await res.json().catch(() => ({}))
+        return json.id || json.notification?.id || null
+      }
+      // In local Vite without Netlify dev this endpoint may 404. Fall through.
+      console.warn('create-notification function skipped:', res.status)
+    }
+  } catch (e) {
+    console.warn('create-notification function failed, trying direct insert:', e)
+  }
+
+  const { data, error } = await supabase.from('app_notifications').insert(payload).select('id').single()
   if (error) {
     console.error('createNotification error:', error)
     return null

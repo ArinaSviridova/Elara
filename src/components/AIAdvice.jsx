@@ -76,7 +76,7 @@ export default function AIAdvice({
         safeMany(supabase.from('sport_logs').select('date,workouts,intensity,duration,notes,custom_workout,supplements').eq('user_id', user.id).order('date', { ascending:false }).limit(10)),
         safeMany(supabase.from('weight_logs').select('date,weight_kg,note').eq('user_id', user.id).order('date', { ascending:false }).limit(10)),
         safeMany(supabase.from('medications').select('name,dosage,med_type,times,is_active').eq('user_id', user.id).eq('is_active', true).limit(10)),
-        safeMany(supabase.from('nutrition_menus').select('title, items, days, created_at').eq('user_id', user.id).order('created_at', { ascending:false }).limit(3)),
+        safeMany(supabase.from('nutrition_menus').select('*').eq('user_id', user.id).order('created_at', { ascending:false }).limit(3)),
       ])
 
       const sortedWeights = [...(weightRows || [])].sort((a,b) => String(a.date).localeCompare(String(b.date)))

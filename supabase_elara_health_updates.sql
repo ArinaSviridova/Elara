@@ -264,23 +264,19 @@ create policy "groups_insert_owner" on groups for insert with check (owner_id = 
 create policy "groups_update_owner" on groups for update using (owner_id = auth.uid());
 create policy "groups_delete_owner" on groups for delete using (owner_id = auth.uid());
 
-drop policy if exists "group_members_select_visible" on group_members;
-drop policy if exists "group_members_insert_self_or_owner" on group_members;
-drop policy if exists "group_members_update_owner_or_self" on group_members;
-drop policy if exists "group_members_delete_owner_or_self" on group_members;
-create policy "group_members_select_visible" on group_members for select using (
-  user_id = auth.uid() or exists (select 1 from groups where groups.id = group_members.group_id and groups.owner_id = auth.uid())
-  or exists (select 1 from group_members gm where gm.group_id = group_members.group_id and gm.user_id = auth.uid())
-);
-create policy "group_members_insert_self_or_owner" on group_members for insert with check (
-  user_id = auth.uid() or exists (select 1 from groups where groups.id = group_members.group_id and groups.owner_id = auth.uid())
-);
-create policy "group_members_update_owner_or_self" on group_members for update using (
-  user_id = auth.uid() or exists (select 1 from groups where groups.id = group_members.group_id and groups.owner_id = auth.uid())
-);
-create policy "group_members_delete_owner_or_self" on group_members for delete using (
-  user_id = auth.uid() or exists (select 1 from groups where groups.id = group_members.group_id and groups.owner_id = auth.uid())
-);
+-- group_members policies: intentionally simple to avoid recursive RLS through groups/group_members.
+do $$
+declare p record;
+begin
+  for p in select policyname from pg_policies where schemaname = 'public' and tablename = 'group_members' loop
+    execute format('drop policy if exists %I on public.group_members', p.policyname);
+  end loop;
+end $$;
+
+create policy "group_members_select_authenticated" on group_members for select to authenticated using (true);
+create policy "group_members_insert_self" on group_members for insert to authenticated with check (auth.uid() = user_id);
+create policy "group_members_update_self" on group_members for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "group_members_delete_self" on group_members for delete to authenticated using (auth.uid() = user_id);
 
 
 -- =====================================================
@@ -293,6 +289,7 @@ create table if not exists public.push_subscriptions (
   endpoint text not null unique,
   p256dh text not null,
   auth text not null,
+  auth_key text,
   user_agent text,
   is_active boolean not null default true,
   created_at timestamp with time zone default now(),
@@ -300,6 +297,15 @@ create table if not exists public.push_subscriptions (
 );
 
 alter table public.push_subscriptions enable row level security;
+
+alter table public.push_subscriptions add column if not exists auth text;
+alter table public.push_subscriptions add column if not exists auth_key text;
+alter table public.push_subscriptions add column if not exists is_active boolean not null default true;
+alter table public.push_subscriptions add column if not exists updated_at timestamp with time zone default now();
+alter table public.push_subscriptions add column if not exists user_agent text;
+update public.push_subscriptions set auth = coalesce(auth, auth_key) where auth is null and auth_key is not null;
+update public.push_subscriptions set auth_key = coalesce(auth_key, auth) where auth_key is null and auth is not null;
+alter table public.push_subscriptions alter column auth_key drop not null;
 
 drop policy if exists "push_subscriptions_select_own" on public.push_subscriptions;
 drop policy if exists "push_subscriptions_insert_own" on public.push_subscriptions;
@@ -332,5 +338,152 @@ on public.push_subscriptions(user_id);
 
 create index if not exists push_subscriptions_active_idx
 on public.push_subscriptions(user_id, is_active);
+
+create index if not exists push_subscriptions_endpoint_idx
+on public.push_subscriptions(endpoint);
+
+-- Scheduled notifications are processed by Netlify scheduled function send-due-notifications.
+create table if not exists scheduled_notifications (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references profiles(id) on delete cascade not null,
+  due_at timestamptz not null,
+  type text not null default 'reminder',
+  title text not null,
+  body text,
+  emoji text default '🔔',
+  source_type text default 'reminders',
+  source_id text,
+  action_url text default '/',
+  priority text default 'normal',
+  data jsonb default '{}'::jsonb,
+  status text not null default 'pending',
+  notification_id uuid references app_notifications(id) on delete set null,
+  last_error text,
+  created_at timestamptz default now(),
+  processed_at timestamptz
+);
+
+alter table scheduled_notifications enable row level security;
+
+alter table scheduled_notifications add column if not exists due_at timestamptz;
+alter table scheduled_notifications add column if not exists type text not null default 'reminder';
+alter table scheduled_notifications add column if not exists title text;
+alter table scheduled_notifications add column if not exists body text;
+alter table scheduled_notifications add column if not exists emoji text default '🔔';
+alter table scheduled_notifications add column if not exists source_type text default 'reminders';
+alter table scheduled_notifications add column if not exists source_id text;
+alter table scheduled_notifications add column if not exists action_url text default '/';
+alter table scheduled_notifications add column if not exists priority text default 'normal';
+alter table scheduled_notifications add column if not exists data jsonb default '{}'::jsonb;
+alter table scheduled_notifications add column if not exists status text not null default 'pending';
+alter table scheduled_notifications add column if not exists notification_id uuid references app_notifications(id) on delete set null;
+alter table scheduled_notifications add column if not exists last_error text;
+alter table scheduled_notifications add column if not exists created_at timestamptz default now();
+alter table scheduled_notifications add column if not exists processed_at timestamptz;
+
+do $$
+declare p record;
+begin
+  for p in select policyname from pg_policies where schemaname = 'public' and tablename = 'scheduled_notifications' loop
+    execute format('drop policy if exists %I on public.scheduled_notifications', p.policyname);
+  end loop;
+end $$;
+
+create policy "scheduled_notifications_select_own" on scheduled_notifications for select to authenticated using (auth.uid() = user_id);
+create policy "scheduled_notifications_insert_own" on scheduled_notifications for insert to authenticated with check (auth.uid() = user_id);
+create policy "scheduled_notifications_update_own" on scheduled_notifications for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "scheduled_notifications_delete_own" on scheduled_notifications for delete to authenticated using (auth.uid() = user_id);
+create index if not exists scheduled_notifications_due_idx on scheduled_notifications(status, due_at);
+create index if not exists scheduled_notifications_user_idx on scheduled_notifications(user_id, due_at);
+
+notify pgrst, 'reload schema';
+
+-- =====================================================
+-- NUTRITION MENUS COMPATIBILITY
+-- =====================================================
+
+create table if not exists public.nutrition_menus (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid not null references public.profiles(id) on delete cascade,
+  title text,
+  days jsonb default '[]'::jsonb,
+  settings jsonb default '{}'::jsonb,
+  recipes jsonb default '{}'::jsonb,
+  tips jsonb default '[]'::jsonb,
+  kcal_per_day integer default 0,
+  partner_kcal_per_day integer default 0,
+  protein_g integer default 0,
+  fat_g integer default 0,
+  carbs_g integer default 0,
+  shared_with uuid references public.profiles(id) on delete set null,
+  shared_with_name text,
+  created_at timestamp with time zone default now(),
+  updated_at timestamp with time zone default now()
+);
+
+alter table public.nutrition_menus
+add column if not exists title text;
+alter table public.nutrition_menus
+add column if not exists days jsonb default '[]'::jsonb;
+alter table public.nutrition_menus
+add column if not exists settings jsonb default '{}'::jsonb;
+alter table public.nutrition_menus
+add column if not exists recipes jsonb default '{}'::jsonb;
+alter table public.nutrition_menus
+add column if not exists tips jsonb default '[]'::jsonb;
+alter table public.nutrition_menus
+add column if not exists kcal_per_day integer default 0;
+alter table public.nutrition_menus
+add column if not exists partner_kcal_per_day integer default 0;
+alter table public.nutrition_menus
+add column if not exists protein_g integer default 0;
+alter table public.nutrition_menus
+add column if not exists fat_g integer default 0;
+alter table public.nutrition_menus
+add column if not exists carbs_g integer default 0;
+alter table public.nutrition_menus
+add column if not exists shared_with uuid references public.profiles(id) on delete set null;
+alter table public.nutrition_menus
+add column if not exists shared_with_name text;
+alter table public.nutrition_menus
+add column if not exists created_at timestamp with time zone default now();
+alter table public.nutrition_menus
+add column if not exists updated_at timestamp with time zone default now();
+
+alter table public.nutrition_menus enable row level security;
+
+drop policy if exists "nutrition_menus_select_own" on public.nutrition_menus;
+drop policy if exists "nutrition_menus_insert_own" on public.nutrition_menus;
+drop policy if exists "nutrition_menus_update_own" on public.nutrition_menus;
+drop policy if exists "nutrition_menus_delete_own" on public.nutrition_menus;
+drop policy if exists "Users manage own menus" on public.nutrition_menus;
+
+create policy "nutrition_menus_select_own"
+on public.nutrition_menus
+for select
+to authenticated
+using (auth.uid() = user_id or auth.uid() = shared_with);
+
+create policy "nutrition_menus_insert_own"
+on public.nutrition_menus
+for insert
+to authenticated
+with check (auth.uid() = user_id);
+
+create policy "nutrition_menus_update_own"
+on public.nutrition_menus
+for update
+to authenticated
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create policy "nutrition_menus_delete_own"
+on public.nutrition_menus
+for delete
+to authenticated
+using (auth.uid() = user_id);
+
+create index if not exists nutrition_menus_user_created_idx
+on public.nutrition_menus(user_id, created_at desc);
 
 notify pgrst, 'reload schema';
